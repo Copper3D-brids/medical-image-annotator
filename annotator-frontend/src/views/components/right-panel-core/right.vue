@@ -109,7 +109,11 @@ let sliderSettingsValue = ref<{
 let currentCasename = ref<string>("");
 let currentImageType = ref<"register"|"origin">("register");
 
-let socket = new WebSocket("ws://127.0.0.1:8000/ws");
+const base_url = import.meta.env.VITE_PLUGIN_API_URL;
+const port = import.meta.env.VITE_PLUGIN_API_PORT;
+
+const {hostname} = new URL(base_url);
+let socket = new WebSocket(`ws://${hostname}:${port}/ws`);
 let socketTimer: NodeJS.Timer;
 
 // Right panel display state
