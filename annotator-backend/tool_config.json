@@ -1,0 +1,21 @@
+{
+  "user_info": {
+    "uuid": ""
+  },
+  "assay_info": {
+    "uuid": "",
+    "name": "",
+    "cohorts": [
+      "",
+      ""
+    ],
+    "datasets": [
+      ""
+    ]
+  },
+  "system": {
+    "minio": {
+      "public_path": ""
+    }
+  }
+}

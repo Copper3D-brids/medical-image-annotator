@@ -54,11 +54,11 @@ import NavBar from "@/components/commonBar/NavBar.vue";
 import Upload from "@/components/commonBar/Upload.vue";
 
 import { GUI, GUIController } from "dat.gui";
-import * as Copper from "copper3d";
+// import * as Copper from "copper3d";
 import "copper3d/dist/css/style.css";
-// import * as Copper from "@/ts/index";
+import * as Copper from "@/ts/index";
 
-import { onMounted, ref, onUnmounted } from "vue";
+import { onBeforeMount, onMounted, ref, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
 import {
   IStoredMasks,
@@ -75,20 +75,15 @@ import {
   IToolCalculateSpherePositionsData,
   IToolAfterLoadImagesResponse,
   IToolGetSliceNumber,
-  IToolGetMouseDragContrastMove
+  IToolGetMouseDragContrastMove,
+  IToolConfig
 } from "@/models/apiTypes";
 import { findRequestUrls, customRound, distance3D } from "@/plugins/view-utils/utils-left";
 import {
   useSegmentationCasesStore,
-  useInitMarksStore,
-  useReplaceMarksStore,
   useSaveSphereStore,
-  useSaveMasksStore,
-  useMaskStore,
-  useClearMaskMeshStore,
-  useNrrdCaseFileUrlsWithOrderStore,
 } from "@/store/app";
-import { useSaveTumourPosition } from "@/plugins/api";
+import { useSaveTumourPosition, useSingleFile, useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks } from "@/plugins/api";
 import {
   findCurrentCase,
   revokeAppUrls,
@@ -103,14 +98,32 @@ type Props = {
   panelWidth?: number;
   panelPercent?: number;
 };
+
+const suffixes = ['pre', '1', '2', '3', '4'] as const;
+type Suffix = typeof suffixes[number];
+
+type InputKey =
+  | `contrast_${Suffix}`
+  | `registration_${Suffix}`;
+
 type TContrastSelected = {
   [key: string]: boolean;
 };
+
 
 withDefaults(defineProps<Props>(), {
   panelWidth: 1300,
   panelPercent: 64,
 });
+
+let config:IToolConfig|null = null;
+onBeforeMount(() => {
+  const configStr = localStorage.getItem("app_config");
+  config = configStr ? JSON.parse(configStr) : null;
+  if(!config){
+    throw new Error("app_config is not found!");
+  }
+})
 
 const leftPanelCoreRef = ref<InstanceType<typeof LeftPanelCore>>();
 // to tell left core component to load mask data or not
@@ -175,20 +188,17 @@ let dts = ref(0);
 let dtn = ref(0);
 let dtr = ref(0);
 
+let currentCaseDetail: IDetails | undefined = undefined;
+
 const showCalculatorValue = ref(false);
 
 
 const { allCasesDetails } = storeToRefs(useSegmentationCasesStore());
 const { getAllCasesDetails } = useSegmentationCasesStore();
-const { sendInitMask } = useInitMarksStore();
-const { sendReplaceMask } = useReplaceMarksStore();
 const { sendSaveSphere } = useSaveSphereStore();
-const { sendSaveMask } = useSaveMasksStore();
-const { maskBackend } = storeToRefs(useMaskStore());
-const { getMaskDataBackend } = useMaskStore();
-const { clearMaskMeshObj } = useClearMaskMeshStore();
-const { getNrrdAndJsonFileUrls } = useNrrdCaseFileUrlsWithOrderStore();
-const { caseUrls } = storeToRefs(useNrrdCaseFileUrlsWithOrderStore());
+
+// const { getNrrdAndJsonFileUrls } = useNrrdCaseFileUrlsWithOrderStore();
+// const { caseUrls } = storeToRefs(useNrrdCaseFileUrlsWithOrderStore());
 
 onMounted(async () => {
   loadBarMain = leftPanelCoreRef.value?.loadBarMain;
@@ -197,16 +207,10 @@ onMounted(async () => {
   gui = leftPanelCoreRef.value?.gui;
   baseContainer = leftPanelCoreRef.value?.baseContainer;
 
-  // get init data
-  await getInitData();
-  
   manageEmitters();
   setupGui();
 });
 
-async function getInitData() {
-  await getAllCasesDetails();
-}
 
 const onFinishedCopperInit = (copperInitData:ILeftCoreCopperInit)=>{
   nrrdTools = copperInitData.nrrdTools;
@@ -250,7 +254,7 @@ const emitteOnRegisterImageChanged = async (result: boolean) => {
 const onSaveMask = async (flag: boolean) => {
   if (flag && nrrdTools!.protectedData.maskData.paintImages.z.length > 0) {
     switchAnimationStatus(loadingContainer!, progress!, "flex", "Saving masks data, please wait......");
-    await sendSaveMask(currentCaseName.value);
+    await useSaveMasks(currentCaseDetail!.id);
     switchAnimationStatus(loadingContainer!, progress!, "none");
     emitter.emit("Segmentation:SyncTumourModelButtonClicked", true);
   }
@@ -310,11 +314,11 @@ const sendInitMaskToBackend = async () => {
       msg: "init",
     });
     const body = {
-      caseId: currentCaseName.value,
+      caseId: currentCaseDetail!.id,
       masks: result.masks as IStoredMasks,
     };
     let start_c: unknown = new Date();
-    await sendInitMask(body);
+    await useInitMasks(body);
     let end_c: unknown = new Date();
     let timeDiff_c = (end_c as number) - (start_c as number);
     console.log(`axios send Time taken: ${timeDiff_c}ms`);
@@ -331,6 +335,8 @@ const loadJsonMasks = (url: string) => {
   xhr.onload = function () {
     if (xhr.status === 200) {
       const data = xhr.response;
+      console.log("line 349:", data);
+      
       if (data === null) {
         console.log("data empty init");
         sendInitMaskToBackend();
@@ -341,19 +347,27 @@ const loadJsonMasks = (url: string) => {
   xhr.send();
 };
 
-const setMaskData = () => {
-  if (loadedUrls[currentCaseName.value]) {
-    if (allCasesDetails.value) {
-      const currentCaseDetail = findCurrentCase(
-        allCasesDetails.value.details,
-        currentCaseName.value
-      );   
-      if (currentCaseDetail.masked) {
-        if (caseUrls.value)
-          loadJsonMasks(loadedUrls[currentCaseName.value].jsonUrl as string);
-      } else {
-        sendInitMaskToBackend();
+const setMaskData = async () => {
+  const caseDetail = allCasesDetails.value?.details.find((detail) => detail.name === currentCaseName.value);
+
+  if (!!caseDetail) {
+    if (Number(caseDetail.output.mask_json_size) > 0) {
+      if (!!regiterUrls.jsonUrl){
+        URL.revokeObjectURL(regiterUrls.jsonUrl);
       }
+      if (!!originUrls.jsonUrl){
+        URL.revokeObjectURL(originUrls.jsonUrl);
+      }
+      const file = await useSingleFile(caseDetail.output.mask_json_path);
+
+      if (!!file){
+        const url = URL.createObjectURL(file);
+        regiterUrls.jsonUrl = url;
+        originUrls.jsonUrl = url;
+        loadJsonMasks(url);
+      }
+    } else {
+      sendInitMaskToBackend();
     }
   }
   setTimeout(() => {
@@ -431,7 +445,7 @@ const getMaskData = async (res:IToolMaskData) => {
 
   const mask = [...copyImage];
   const body: IReplaceMask = {
-    caseId: currentCaseName.value,
+    caseId: currentCaseDetail!.id,
     sliceId,
     label,
     mask,
@@ -442,10 +456,10 @@ const getMaskData = async (res:IToolMaskData) => {
   
   
   if (clearAllFlag) {
-    clearMaskMeshObj(currentCaseName.value);
+    await useClearMaskMesh(currentCaseDetail!.id);
     sendInitMaskToBackend();
   } else {
-    await sendReplaceMask(body);
+    await useReplaceMask(body);
   }
 };
 
@@ -538,6 +552,20 @@ function onContrastSelected(flag: boolean, i: number) {
   }
 }
 
+function syncPair(
+  input: Record<InputKey, string>,
+  suffix: Suffix
+) {
+  const cKey = `contrast_${suffix}` as const;
+  const rKey = `registration_${suffix}` as const;
+
+  if (input[cKey] == null && input[rKey] != null) {
+    input[cKey] = input[rKey];
+  } else if (input[rKey] == null && input[cKey] != null) {
+    input[rKey] = input[cKey];
+  }
+}
+
 async function onCaseSwitched(casename: string) {
   // default every time load register image first, when case switched
   regiterSwitchBarStatus = true;
@@ -546,8 +574,6 @@ async function onCaseSwitched(casename: string) {
   switchAnimationStatus(loadingContainer!, progress!, "flex", "Saving masks data, please wait......");
 
   // step 2: revoke regsiter and origin images urls
-  revokeCaseUrls(originUrls);
-  revokeCaseUrls(regiterUrls);
   originUrls.nrrdUrls.length = 0;
   regiterUrls.nrrdUrls.length = 0;
   originUrls.jsonUrl = "";
@@ -556,36 +582,56 @@ async function onCaseSwitched(casename: string) {
   // step 3: clear origin and register slices array
   originSlices.length = 0;
   registerSlices.length = 0;
-  // revoke App all urls, need to modify later
-  revokeAppUrls(loadedUrls);
-  loadedUrls = {};
 
   // step 4: set current case name
   currentCaseName.value = casename;
   // step 5: update init data
-  await getInitData();
+  await getAllCasesDetails({
+    user_uuid:config!.user_info.uuid,
+    assay_uuid:config!.assay_info.uuid
+  });
 
   // step 6: start to get nrrd urls
   switchAnimationStatus(loadingContainer!, progress!, "flex", "Prepare Nrrd files, please wait......");
-  const requests = findRequestUrls(
-    allCasesDetails.value?.details as Array<IDetails>,
-    currentCaseName.value,
-    "registration"
-  );
-  await getNrrdAndJsonFileUrls(requests);
 
-  if (!!caseUrls.value) {
-    regiterUrls = caseUrls.value as ICaseUrls;
+  currentCaseDetail = allCasesDetails.value?.details.find((detail) => detail.name === currentCaseName.value);
+
+  // step 7: re-organize case urls and init mask.json
+  // step 7.1: re-organize case urls
+  if(currentCaseDetail){
+     regiterUrls = {
+      nrrdUrls: [],
+      jsonUrl: Number(currentCaseDetail.output.mask_json_size) > 0 ?  currentCaseDetail.output.mask_json_path : ""
+    };
+    originUrls = {
+      nrrdUrls: [],
+      jsonUrl: Number(currentCaseDetail.output.mask_json_size) > 0 ?  currentCaseDetail.output.mask_json_path : ""
+    };
+
+    suffixes.forEach(suffix => {
+      syncPair(currentCaseDetail!.input, suffix);
+      if(!!currentCaseDetail!.input[`registration_${suffix}`]){
+        regiterUrls.nrrdUrls.push(currentCaseDetail!.input[`registration_${suffix}`]);
+      }
+      if(!!currentCaseDetail!.input[`contrast_${suffix}`]){
+        originUrls.nrrdUrls.push(currentCaseDetail!.input[`contrast_${suffix}`]);
+      }
+    });
+  
     // trigger the left core ready to load function
-    currentCaseContrastUrls.value = caseUrls.value.nrrdUrls;
-    loadedUrls[currentCaseName.value] = caseUrls.value;
+    currentCaseContrastUrls.value = regiterUrls.nrrdUrls;
+    // loadedUrls[currentCaseName.value] = caseUrls.value;
     const details = allCasesDetails.value?.details;
     emitter.emit("Segmentation:CaseDetails", {
-      currentCaseId:currentCaseName.value,
+      currentCaseName:currentCaseName.value,
+      currentCaseId:currentCaseDetail!.id,
       details,
       maskNrrd: !!currentCaseContrastUrls.value[1]?currentCaseContrastUrls.value[1]:currentCaseContrastUrls.value[0],
     });
+  }else{
+    throw new Error("Case detail not found");
   }
+  
   // when switch case, load mask data
   loadMask.value = true;
   // tell nav bar file count
@@ -609,17 +655,7 @@ async function onRegistedStateChanged(isShowRegisterImage: boolean) {
       nrrdTools!.switchAllSlicesArrayData(displaySlices);
     }else{
       // step 2: if there is no origin slices
-      const requests = findRequestUrls(
-        allCasesDetails.value?.details as Array<IDetails>,
-        currentCaseName.value,
-        "origin"
-      );
-      await getNrrdAndJsonFileUrls(requests);
-      if (!!caseUrls.value) {
-        originUrls = caseUrls.value as ICaseUrls;
-        // trigger the left core ready to load function
-        currentCaseContrastUrls.value = caseUrls.value.nrrdUrls; 
-      }
+      currentCaseContrastUrls.value = originUrls.nrrdUrls;
     }
     sendToRightContrstUrl = originUrls.nrrdUrls[1]?originUrls.nrrdUrls[1]:originUrls.nrrdUrls[0];
   } else {

@@ -1,8 +1,8 @@
 <template>
     <Operation>
-      <template #Calculator>
+      <!-- <template #Calculator>
         <Calculator />
-      </template>
+      </template> -->
 
       <template #FunctionalControl>
         <FunctionalControl
@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import OperationAdvance from "./advance/OperationAdvance.vue";
-import Calculator from "./advance/Calculator.vue";
+// import Calculator from "./advance/Calculator.vue";
 import Operation from "@/components/nav-components/Operation.vue"
 import FunctionalControl from "@/components/nav-components/functionalCtl/FunctionalControl.vue";
 import SliderControl from "@/components/nav-components/sliderCtl/SliderControl.vue";
@@ -66,8 +66,8 @@ type TGuiSettings = {
 };
 
 // load tumour window
-const { tumourWindow } = storeToRefs(useTumourWindowStore());
-const { getTumourWindowChrunk } = useTumourWindowStore();
+// const { tumourWindow } = storeToRefs(useTumourWindowStore());
+// const { getTumourWindowChrunk } = useTumourWindowStore();
 
 // Functional Controls
 const commFuncRadios = ref("segmentation");
@@ -99,10 +99,8 @@ let nrrdTools:Copper.NrrdTools;
 
 const commFuncRadioValues = ref([
   { label: "Pencil", value: "segmentation", color: "success" },
-  { label: "Sphere", value: "sphere", color: "warning" },
-  { label: "Eraser", value: "Eraser", color: "error" },
   { label: "Brush", value: "brush", color: "info" },
-  { label: "Calculate Distance", value: "calculator", color: "calculator" },
+  { label: "Eraser", value: "Eraser", color: "error" },
 ]);
 
 const commSliderRadioValues = ref([
@@ -168,7 +166,7 @@ const emitterOnCaseSwitched = async (casename:string) => {
   btnResetZoomDisabled.value = true;
   btnClearDisabled.value = true;
   btnClearAllDisabled.value = true;
-  await getTumourWindowChrunk(casename as string);
+  // await getTumourWindowChrunk(casename as string);
 }
 const emitterOnFinishLoadAllCaseImages = (val:TGuiSettings) => {
   guiSettings.value = val;
@@ -211,12 +209,12 @@ function dragToChangeImageWindow(type:"windowHigh"|"windowLow", step:number){
 
 function setupTumourSpherePosition(){
 
-  if (!!tumourWindow.value){
-    // Note: the tumour center we recieve is in mm, we need to convert it to (pixel, pixel, mm) in Axial view
-    // pixel / spacing = mm
-    // mm * spacing = pixel
-    setTumourStudyPointPosition(nrrdTools, (tumourWindow.value as TTumourCenter).center, "tumour")
-  }
+  // if (!!tumourWindow.value){
+  //   // Note: the tumour center we recieve is in mm, we need to convert it to (pixel, pixel, mm) in Axial view
+  //   // pixel / spacing = mm
+  //   // mm * spacing = pixel
+  //   setTumourStudyPointPosition(nrrdTools, (tumourWindow.value as TTumourCenter).center, "tumour")
+  // }
 }
 
 function toggleFuncRadios(val: any) {

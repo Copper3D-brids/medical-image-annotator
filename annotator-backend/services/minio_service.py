@@ -57,7 +57,6 @@ class MinIOService:
                 raise ValueError(f"Dataset validation failed for '{ds}': {e}")
 
         # 1.3 Verify cohorts exist in ALL datasets' subjects.xlsx
-        # "验证 所提供的cohorts名字是否都存在于所提供的所有datasets中subjects.xlsx文件的subject id中"
         for ds_name, meta in ds_meta.items():
             subjects_df = meta['subjects']
             # Normalize column names just in case, but assume standard 'subject id'
@@ -128,15 +127,17 @@ class MinIOService:
                                 # Construct full path
                                 full_url = urljoin(meta['url'], str(relative_path))
 
-                                print(full_url)
                                 resolved_paths[cohort][inp_type] = full_url
                                 found = True
                                 break # Found the file for this input, break inner loop (samples)
                         
                         if found:
                             break # Found this input in this dataset, break dataset loop
+                        else:
+                            resolved_paths[cohort][inp_type] = None
                 
                 if not found:
-                    raise ValueError(f"Could not find input '{inp_type}' for cohort '{cohort}' in any provided dataset.")
+                    # raise ValueError(f"Could not find input '{inp_type}' for cohort '{cohort}' in any provided dataset.")
+                    resolved_paths[cohort][inp_type] = None
                     
         return resolved_paths

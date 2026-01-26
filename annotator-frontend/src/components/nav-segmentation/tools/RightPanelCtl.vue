@@ -1,11 +1,11 @@
 <template>
   <div>
     <Switcher
-      :title="'Breast Model'"
-      :label="switchBreastLabel"
-      :disabled="breastModelDisabled"
-      v-model:controller="breastModelState"
-      @toggleUpdate="toggleBreast"
+      :title="'3D Model'"
+      :label="switchModelLabel"
+      :disabled="modelDisabled"
+      v-model:controller="modelState"
+      @toggleUpdate="toggle3DModel"
     />
   </div>
 </template>
@@ -15,9 +15,9 @@ import Switcher from "@/components/commonBar/Switcher.vue";
 import { ref, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
 
-const breastModelState = ref(true);
-const breastModelDisabled = ref(true)
-const switchBreastLabel = ref("show");
+const modelState = ref(true);
+const modelDisabled = ref(true)
+const switchModelLabel = ref("show");
 
 
 onMounted(() => {
@@ -29,12 +29,12 @@ function manageEmitters() {
 }
 
 const emitterOnFinishLoadAllCaseImages = () => {
-  breastModelDisabled.value = false;
+  modelDisabled.value = false;
 }
 
-function toggleBreast(value: boolean) {
-  switchBreastLabel.value = switchBreastLabel.value === "show" ? "hide" : "show";
-  emitter.emit("Common:ToggleBreastVisibility", value);
+function toggle3DModel(value: boolean) {
+  switchModelLabel.value = switchModelLabel.value === "show" ? "hide" : "show";
+  emitter.emit("Common:ToggleRightModelVisibility", value);
 }
 
 onUnmounted(() => {

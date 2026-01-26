@@ -1,101 +1,76 @@
 from fastapi import APIRouter
 import json
 import time
-from fastapi import Query, BackgroundTasks, WebSocket, HTTPException
+from fastapi import Query, BackgroundTasks, WebSocket, HTTPException, Depends
 from fastapi.responses import FileResponse, StreamingResponse
-from utils import tools, Config, TumourData
+from utils import tools, TumourData
+from utils.ws_manager import manager
 from models import model
 from task import task_oi
 from pathlib import Path
-
-current_file = Path(__file__).resolve()
-root_dir = current_file.parent.parent
-
-def set_data_root_path():
-    Config.BASE_PATH = root_dir / "data" 
+from models.api_models import UserAuth
+from sqlalchemy.orm import Session
+from models.db_model import User, Assay, Case, CaseInput, CaseOutput
+from services.minio_service import MinIOService
+from database.database import get_db
 
 router = APIRouter()
 
-@router.websocket('/ws')
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    # send a JSON object over the WebSocket connection
-    Config.Connected_Websocket = websocket
+
+@router.websocket('/ws/{case_id}')
+async def websocket_endpoint(websocket: WebSocket, case_id: str):
+    """WebSocket endpoint for receiving OBJ conversion completion notifications.
+    
+    Args:
+        websocket: The WebSocket connection
+        case_id: The case ID to associate with this connection
+    """
+    await manager.connect(case_id, websocket)
     try:
         while True:
-            message = await websocket.receive_text()
-            if Config.Updated_Mesh:
-                await send_obj_to_frontend(Config.Current_Case_Name)
-                Config.Updated_Mesh = False
+            # Keep connection alive, just wait for messages
+            await websocket.receive_text()
     except Exception as e:
-        print("closed", e)
-        Config.Connected_Websocket = None
+        print(f"WebSocket closed for case {case_id}: {e}")
+    finally:
+        manager.disconnect(case_id)
 
 
-async def send_obj_to_frontend(patient_id):
-    obj_path = tools.get_file_path(patient_id, "obj", "mask.obj")
-    file_exists = (obj_path is not None) and obj_path.exists()
-    if file_exists:
-        with open(obj_path, "rb") as file:
-            file_data = file.read()
-        if Config.Connected_Websocket is not None:
-            await Config.Connected_Websocket.send_bytes(file_data)
-            volume_json = {"volume": TumourData.volume}
-            await Config.Connected_Websocket.send_text(json.dumps(volume_json))
-            print("send mesh to frontend!")
-    else:
-        if Config.Connected_Websocket is not None:
-            await Config.Connected_Websocket.send_text("delete")
-            print("send to frontend, delete mesh!")
-
-
-@router.get('/api/cases')
-async def get_cases_name(background_tasks: BackgroundTasks):
-    set_data_root_path()
-    background_tasks.add_task(tools.save)
-    tools.get_metadata()
-    case_names = tools.get_all_case_names()
-    case_names.sort()
-    res = {}
-    res["names"] = case_names
-    res["details"] = []
-    for name in case_names:
-        origin_nrrd_paths = tools.get_category_files(name, "nrrd", "origin")
-        registration_nrrd_paths = tools.get_category_files(name, "nrrd", "registration")
-        segmentation_breast_points_paths = tools.get_category_files(name, "json", "segmentation")
-        segmentation_breast_model_paths = tools.get_category_files(name, "obj", "segmentation")
-        # get all masks json files
-        segmentation_manual_mask_paths = tools.get_category_files(name, "json", "segmentation_manual",
-                                                                  ["sphere_points.json", "tumour_position_study.json",
-                                                                   "tumour_position_study_assisted.json"])
-        segmentation_manual_3dobj_paths = tools.get_category_files(name, "obj", "segmentation_manual")
-        json_is_exist = tools.check_file_exist(name, "json", "mask.json")
-        obj_is_exist = tools.check_file_exist(name, "obj", "mask.obj")
-        reg_is_exist = tools.check_file_exist(name, "nrrd", "r0.nrrd")
-        file_paths = {"origin_nrrd_paths": origin_nrrd_paths,
-                      "registration_nrrd_paths": registration_nrrd_paths,
-                      "segmentation_breast_points_paths": segmentation_breast_points_paths,
-                      "segmentation_breast_model_paths": segmentation_breast_model_paths,
-                      "segmentation_manual_mask_paths": segmentation_manual_mask_paths,
-                      "segmentation_manual_3dobj_paths": segmentation_manual_3dobj_paths}
-
-        res["details"].append(
-            {"name": name, "masked": json_is_exist, "has_mesh": obj_is_exist, "registered": reg_is_exist,
-             "file_paths": file_paths})
-
+@router.post('/api/cases')
+async def get_cases_infos(auth: UserAuth, db: Session = Depends(get_db)):
+    res = {
+        "names": [],
+        "details": []
+    }
+    # get cases from db
+    cases = db.query(Case).filter(Case.assay_uuid == auth.assay_uuid,  # type: ignore
+                                  Case.user_uuid == auth.user_uuid).all()  # type: ignore
+    for case in cases:
+        res["names"].append(case.name)
+        res["details"].append({
+            "id": case.id,
+            "name": case.name,
+            "assay_uuid": case.assay_uuid,
+            "input": {
+                "contrast_pre": case.input.contrast_pre_path if case.input else None,
+                "contrast_1": case.input.contrast_1_path if case.input else None,
+                "contrast_2": case.input.contrast_2_path if case.input else None,
+                "contrast_3": case.input.contrast_3_path if case.input else None,
+                "contrast_4": case.input.contrast_4_path if case.input else None,
+                "registration_pre": case.input.registration_pre_path if case.input else None,
+                "registration_1": case.input.registration_1_path if case.input else None,
+                "registration_2": case.input.registration_2_path if case.input else None,
+                "registration_3": case.input.registration_3_path if case.input else None,
+                "registration_4": case.input.registration_4_path if case.input else None,
+            },
+            "output": {
+                "mask_json_path": case.output.mask_json_path if case.output else None,
+                "mask_json_size": case.output.mask_json_size if case.output else None,
+                "mask_obj_path": case.output.mask_obj_path if case.output else None,
+                "mask_obj_size": case.output.mask_obj_size if case.output else None,
+            }
+        })
     return res
-
-
-@router.get('/api/case/')
-async def send_nrrd_case(name: str = Query(None)):
-    start_time = time.time()
-    if name is not None:
-        #  set default images to registration
-        tools.zipNrrdFiles(name, "registration")
-    end_time = time.time()
-    run_time = end_time - start_time
-    print("get files cost：{:.2f}s".format(run_time))
-    return FileResponse('nrrd_files.zip', media_type='application/zip')
 
 
 async def process_file(file_path: Path, headers: dict):
@@ -113,6 +88,7 @@ async def process_file(file_path: Path, headers: dict):
 @router.get('/api/single-file')
 async def send_single_file(path: str = Query(None)):
     file_path = Path(path)
+    print(file_path)
     if file_path.exists():
         headers = {"x-file-name": file_path.name}
         response = await process_file(file_path, headers)
@@ -124,70 +100,57 @@ async def send_single_file(path: str = Query(None)):
         return "No file exists!"
 
 
-@router.get('/api/caseorigin/')
-async def send_nrrd_case(name: str = Query(None)):
-    if name is not None:
-        tools.zipNrrdFiles(name, "origin")
-    return FileResponse('nrrd_files.zip', media_type='application/zip')
-
-
-@router.get('/api/casereg/')
-async def send_nrrd_case(data: str):
-    data_Obj = json.loads(data)
-    name = data_Obj["name"]
-    radius = data_Obj["radius"]
-    origin = data_Obj["origin"]
-    if name is not None:
-        tools.zipNrrdFiles(name, "registration")
-    return FileResponse('nrrd_files.zip', media_type='application/zip')
-
-
 @router.post("/api/mask/init")
-async def init_mask(mask: model.Masks):
-    Config.MASKS = None
-    tools.write_data_to_json(mask.caseId, mask.masks)
+async def init_mask(mask: model.Masks, db: Session = Depends(get_db)):
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == mask.caseId).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+    tools.save_mask_data(case_output, mask.masks)
+
+    db.commit()
+    db.refresh(case_output)
     return True
 
 
 @router.post("/api/mask/replace")
-async def replace_mask(replace_slice: model.Mask):
-    Config.ClearAllMask = False
-    tools.replace_data_to_json(replace_slice.caseId, replace_slice)
+async def replace_mask(mask: model.Mask, db: Session = Depends(get_db)):
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == mask.caseId).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+
+    assert isinstance(case_output, CaseOutput)
+    tools.replace_data_to_json(case_output, mask)
+
+    db.commit()
+    db.refresh(case_output)
     return True
 
 
-@router.post("/api/sphere/save")
-async def save_sphere(sphere_point: model.Sphere):
-    save_data = {
-        "caseId": sphere_point.caseId,
-        "sliceId": sphere_point.sliceId,
-        "origin": sphere_point.origin,
-        "spacing": sphere_point.spacing,
-        "sphereRadiusMM": sphere_point.sphereRadiusMM,
-        "sphereOriginMM": sphere_point.sphereOriginMM
-    }
-    return tools.save_sphere_points_to_json(sphere_point.caseId, save_data)
+@router.get("/api/clearmesh")
+async def clear_mesh(case_id: str = Query(None), db: Session = Depends(get_db)):
+    case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
+    if not case_output:
+        raise HTTPException(status_code=404, detail="CaseOutput not found")
+
+    assert isinstance(case_output, CaseOutput)
+    mesh_obj_path = Path(case_output.mask_obj_path)
+    if mesh_obj_path.exists():
+        mesh_obj_path.write_text("")
+        case_output.mask_obj_size = mesh_obj_path.stat().st_size
+
+        db.commit()
+        db.refresh(case_output)
+        return True
+    else:
+        mesh_obj_path.mkdir(parents=True, exist_ok=True)
+        print("No mesh obj exists!")
+        return False
 
 
 @router.get("/api/mask/save")
-async def save_mask(name: str, background_tasks: BackgroundTasks):
-    Config.Current_Case_Name = name
-    background_tasks.add_task(task_oi.json_to_nii, name)
-    background_tasks.add_task(task_oi.on_complete)
+async def save_mask(case_id: str, background_tasks: BackgroundTasks):
+    background_tasks.add_task(task_oi.json_converter, case_id)
     return True
-
-
-@router.get("/api/mask")
-async def get_mask(name: str = Query(None)):
-    if name is not None:
-        Config.Current_Case_Name = name
-        mask_json_path = tools.get_file_path(name, "json", "mask.json")
-        checked = tools.check_file_exist(name, "json", "mask.json")
-        if checked:
-            file_object = tools.getReturnedJsonFormat(mask_json_path)
-            return StreamingResponse(file_object, media_type="application/json")
-        else:
-            return False
 
 
 @router.get("/api/breast_points")
@@ -205,36 +168,6 @@ async def get_breast_points(name: str = Query(None), filename: str = Query(None)
         return False
 
 
-@router.get("/api/display")
-async def get_display_mask_nrrd(name: str = Query(None)):
-    mask_nrrd_path = tools.get_file_path(name, "nrrd", "contrast_0.nrrd")
-    if mask_nrrd_path.exists():
-        return FileResponse(mask_nrrd_path, media_type="application/octet-stream", filename="mask.nrrd")
-    else:
-        return False
-
-
-@router.get("/api/mask_tumour_mesh")
-async def get_display_segment_tumour_model(name: str = Query(None)):
-    mask_mesh_path = tools.get_file_path(name, "obj", "mask.obj")
-    mask_json_path = tools.get_file_path(name, "json", "mask.json")
-    if (mask_mesh_path is not None) and (mask_mesh_path.exists()) and (mask_json_path.stat().st_size != 0) and (
-            mask_mesh_path.stat().st_size != 0):
-        with open(mask_json_path) as user_file:
-            file_contents = user_file.read()
-            parsed_json = json.loads(file_contents)
-            volume = parsed_json["volume"]
-            user_file.close()
-        mesh_volume_str = json.dumps({"volume": volume})
-        headers = {"x-volume": mesh_volume_str}
-        file_res = FileResponse(mask_mesh_path, media_type="application/octet-stream", filename="mask.obj",
-                                headers=headers)
-        return file_res
-    else:
-        # return False
-        raise HTTPException(status_code=404, detail="Item not found")
-
-
 @router.get("/api/breast_model")
 async def get_display_breast_model(name: str = Query(None)):
     breast_mesh_path = tools.get_file_path(name, "obj", "prone_surface.obj")
@@ -243,20 +176,6 @@ async def get_display_breast_model(name: str = Query(None)):
         return file_res
     else:
         return False
-
-
-@router.get("/api/clearmesh")
-async def clear_mesh(name: str = Query(None)):
-    Config.ClearAllMask = True
-    mesh_obj_path = tools.get_file_path(name, "obj", "mask.obj")
-    if (mesh_obj_path is not None) and mesh_obj_path.exists():
-        try:
-            mesh_obj_path.unlink()
-            print(f"{mesh_obj_path.name} file delete successfully!")
-        except OSError as e:
-            print(f"fail to delete file!")
-    Config.ClearAllMask = False
-    return "success"
 
 
 @router.post("/api/save_tumour_position")

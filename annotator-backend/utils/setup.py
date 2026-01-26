@@ -4,36 +4,24 @@ import os
 import sys
 
 
-
-def get_base_from_env():
-    env_path = Path('.') / '.env'
-    load_dotenv(dotenv_path=env_path)
-
-    if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-        return os.environ["BASE"]
-    elif sys.platform.startswith('win'):
-        return os.environ["BASE_DUKE_locally"]
-        # return os.environ["BASE_locally"]
-    return os.environ["BASE"]
+# def get_base_from_env():
+#     env_path = Path('.') / '.env'
+#     load_dotenv(dotenv_path=env_path)
+#
+#     if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
+#         return os.environ["BASE"]
+#     elif sys.platform.startswith('win'):
+#         return os.environ["BASE_DUKE_locally"]
+#         # return os.environ["BASE_locally"]
+#     return os.environ["BASE"]
 
 
 class Config:
-    MASKS = None
-    METADATA = None
-    Connected_Websocket = None
-    Updated_Mesh = False
-    ClearAllMask = False
-    Current_Case_Name = ""
-    BASE_PATH = Path(get_base_from_env())
-    METADATA_PATH = "./manifest.xlsx"
-    MASK_FILE_PATH = ""
-    MASK_FOLDER_PATH = ""
-    IMPORT_FOLDER_PATH = "import_nrrd"
-    EXPORT_FOLDER_PATH = "export_data"
-    CASE_NAMES = []
-    NNInteractive_REPO_ID = "nnInteractive/nnInteractive"
-    NNInteractive_MODEL_NAME = "nnInteractive_v1.0"  # Updated models may be available in the future
-    NNInteractive_TRAIN_DIR = "./nninteractive"
+    METADATA_PATH = "manifest.xlsx"
+    SAMPLES_METADATA_PATH = "samples.xlsx"
+    SUBJECTS_METADATA_PATH = "subjects.xlsx"
+    INPUTS = ["contrast-pre","contrast-1", "contrast-2", "contrast-3", "contrast-4", "registration-pre", "registration-1", "registration-2", "registration-3", "registration-4"]
+    OUTPUTS = ["mask-json", "mask-nii", "mask-obj", "tumour-center-position-json"]
 
 
 class TumourData:

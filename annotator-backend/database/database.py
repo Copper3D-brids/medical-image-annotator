@@ -1,4 +1,4 @@
-from app.models.db_model import SessionLocal, Base, engine
+from models.db_model import SessionLocal, Base, engine
 import os
 
 
@@ -7,7 +7,7 @@ def create_tables():
 
 
 def ensure_data_directory():
-    database_path = os.getenv("DATABASE_PATH", "./data/plugin_registry.db")
+    database_path = os.getenv("DATABASE_PATH", "./annotator.db")
     data_dir = os.path.dirname(database_path)
     if not os.path.exists(data_dir):
         os.makedirs(data_dir, exist_ok=True)

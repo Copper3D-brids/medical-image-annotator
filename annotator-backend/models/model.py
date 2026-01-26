@@ -1,14 +1,15 @@
 from pydantic import BaseModel
 from typing import Union
+from .api_models import UserAuth
 
 
 class Masks(BaseModel):
-    caseId: str
+    caseId: Union[int, str]
     masks: object
 
 
 class Mask(BaseModel):
-    caseId: str
+    caseId: Union[int, str]
     sliceId: int
     label: str
     mask: list
@@ -58,9 +59,12 @@ class TumourStudyReport(BaseModel):
     complete: bool
     assisted: bool
 
+
 class TumourPositionNNMask(BaseModel):
     caseId: str
     position: list
+
+
 class TumourPosition(BaseModel):
     case_name: str
     position: ReportPosition

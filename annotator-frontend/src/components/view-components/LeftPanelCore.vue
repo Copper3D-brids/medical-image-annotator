@@ -24,7 +24,8 @@
 </template>
 
 <script setup lang="ts">
-import * as Copper from "copper3d";
+// import * as Copper from "copper3d";
+import * as Copper from "@/ts/index";
 import "copper3d/dist/css/style.css";
 import { GUI, GUIController } from "dat.gui";
 import { ref, onMounted, onUnmounted, onBeforeUnmount, watch, watchEffect } from "vue";
@@ -235,6 +236,7 @@ const imageLoader = (name:string, url:string, order: number, total:number, resol
     allSlices.push(newNrrdSlice);
     allLoadedMeshes.push(newNrrdMesh);
     filesCount.value += 1;
+    
     if (filesCount.value >= total) {
       allLoadedMeshes.sort((a: any, b: any) => {
         return a.order - b.order;
@@ -317,7 +319,7 @@ watch(filesCount, ()=>{
     if (loadMask.value) {
       setMaskData();
     }
-
+    
     emit("update:afterLoadAllCaseImages", {
       allSlices,
       allLoadedMeshes,
@@ -325,10 +327,9 @@ watch(filesCount, ()=>{
 
     firstLoad = false;
     loadMask.value = false;
-  }
-  setTimeout(() => {
+
     filesCount.value = 0;
-  }, 1000);
+  }
 })
 
 

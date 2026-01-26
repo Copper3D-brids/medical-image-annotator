@@ -8,7 +8,7 @@
   >
     <template #tumour-distance-panel>
       <TumourDistancePanelRight 
-        :tumour-volume="tumourVolume"
+        :tumour-volume="0"
         :tumour-extent="tumourExtent"
         :skin-dist="skinDist"
         :rib-dist="ribDist"
@@ -35,10 +35,10 @@ import TumourDistancePanelRight from "@/components/view-components/TumourDistanc
 import NavBarRight from "@/components/commonBar/NavBarRight.vue";
 import { GUI } from "dat.gui";
 import * as THREE from "three";
-import * as Copper from "copper3d";
+// import * as Copper from "copper3d";
 import "copper3d/dist/css/style.css";
 import createKDTree from "copper3d-tree";
-// import * as Copper from "@/ts/index";
+import * as Copper from "@/ts/index";
 import {
   onMounted,
   ref,
@@ -48,15 +48,15 @@ import {
 import emitter from "@/plugins/custom-emitter";;
 import { storeToRefs } from "pinia";
 import {
-  useMaskNrrdStore,
-  useMaskTumourObjDataStore,
   useBreastMeshObjUrlStore,
   useNipplePointsStore,
   useRibPointsStore,
   useSkinPointsStore
 } from "@/store/app";
+import { useSingleFile } from "@/plugins/api";
 import {
   ICaseDetails,
+  IDetails,
   ICommXYZ,
   ILeftRightData,
   INipplePoints,
@@ -113,8 +113,7 @@ const base_url = import.meta.env.VITE_PLUGIN_API_URL;
 const port = import.meta.env.VITE_PLUGIN_API_PORT;
 
 const {hostname} = new URL(base_url);
-let socket = new WebSocket(`ws://${hostname}:${port}/ws`);
-let socketTimer: NodeJS.Timer;
+let socket: WebSocket | null = null;
 
 // Right panel display state
 const openLoading = ref(false);
@@ -171,18 +170,19 @@ const ribSphere = new THREE.Mesh(commGeo, new THREE.MeshBasicMaterial({ color: "
 skinSphere.renderOrder=0;
 ribSphere.renderOrder=0;
 
-const { maskNrrd } = storeToRefs(useMaskNrrdStore());
-const { getMaskNrrd } = useMaskNrrdStore();
-const { maskTumourObjData } = storeToRefs(useMaskTumourObjDataStore());
-const { getMaskTumourObjData } = useMaskTumourObjDataStore();
+const maskNrrd = ref<string>();
+
+const maskTumourObj = ref<string>();
+let currentCaseDetails:IDetails;
+
 const { breastMeshObjUrl } = storeToRefs(useBreastMeshObjUrlStore());
 const { getBreastMeshObjUrl } = useBreastMeshObjUrlStore();
-const { nipplePoints } = storeToRefs(useNipplePointsStore());
-const { getNipplePoints } = useNipplePointsStore();
-const { skinPoints } = storeToRefs(useSkinPointsStore());
-const { getSkinPoints } = useSkinPointsStore();
-const { ribPoints } = storeToRefs(useRibPointsStore());
-const { getRibPoints } = useRibPointsStore();
+// const { nipplePoints } = storeToRefs(useNipplePointsStore());
+// const { getNipplePoints } = useNipplePointsStore();
+// const { skinPoints } = storeToRefs(useSkinPointsStore());
+// const { getSkinPoints } = useSkinPointsStore();
+// const { ribPoints } = storeToRefs(useRibPointsStore());
+// const { getRibPoints } = useRibPointsStore();
 
 const props = withDefaults(defineProps<Props>(), {
   panelWidth: 1000,
@@ -202,17 +202,22 @@ onMounted(() => {
   progress = rightPanelCoreRef.value?.progress;
   copperLoadingAnimationForNrrdLoader = rightPanelCoreRef.value?.copperLoadingAnimationForNrrdLoader;
   manageEmitters();
-  initSocket()
-
+  // WebSocket will be initialized when a case is switched (emitterOnCaseDetails)
 });
 
-function initSocket(){
+function initSocket(caseId: string) {
+  // Close existing connection if any
+  if (socket) {
+    socket.close();
+  }
+  socket = new WebSocket(`ws://${hostname}:${port}/ws/${caseId}`);
   socket.onopen = function (e) {
-    console.log("socket send...");
-    socket.send("Frontend socket connect!");
+    console.log(`WebSocket connected for case: ${caseId}`);
   };
-
-  socket.onmessage = getSocketUpdatedMessage;
+  socket.onmessage = handleWebSocketMessage;
+  socket.onclose = function (e) {
+    console.log(`WebSocket closed for case: ${caseId}`);
+  };
 }
 
 function initPanelValue() {
@@ -230,12 +235,7 @@ function onFinishedCopperInit(data: { appRenderer: Copper.copperRenderer, copper
 
 }
 
-function requestSocketUpdateTumourModel() {
-  const intervalId = setInterval(() => {
-    socket.send("Frontend socket connect!");
-  }, 1000);
-  return intervalId;
-}
+// Removed: polling is no longer needed, server will push notification
 
 function clearModelsAndStates(){
   registrationMeshes = undefined;
@@ -252,48 +252,62 @@ function clearModelsAndStates(){
   ribTree = undefined;
   initPanelValue();
   rightPanelCoreRef.value?.removeOldMeshes(allRightPanelMeshes);
-  if(!!maskTumourObjData.value.maskTumourObjUrl){
-      URL.revokeObjectURL(maskTumourObjData.value.maskTumourObjUrl)
+  if(!!maskTumourObj.value){
+      URL.revokeObjectURL(maskTumourObj.value)
   }
 }
 
-function getSocketUpdatedMessage(event: MessageEvent) {
-  if (typeof event.data === "string") {
-    if (event.data === "delete") {
+async function handleWebSocketMessage(event: MessageEvent) {
+  try {
+    const data = JSON.parse(event.data);
+    
+    if (data.status === "complete" && data.action === "reload_obj") {
+      console.log("Received OBJ reload notification:", data);
+      
+      // Update tumour volume from notification
+      if (data.volume) {
+        tumourVolume.value = Math.ceil(data.volume) / 1000;
+      }
+      
+      // Reload OBJ file via HTTP
+      const objUrl = currentCaseDetails.output.mask_obj_path;
+      if (objUrl) {
+        const file = await useSingleFile(objUrl);
+        if (file) {
+          if (maskTumourObj.value) {
+            URL.revokeObjectURL(maskTumourObj.value);
+          }
+          maskTumourObj.value = URL.createObjectURL(file);
+          loadSegmentTumour(maskTumourObj.value);
+        }
+      }
+      
+      // Remove preview sphere if exists
+      if (preTumourShpere) {
+        copperScene.scene.remove(preTumourShpere);
+        preTumourShpere = undefined;
+      }
+      
+      // Hide loading animation
+      switchAnimationStatus(loadingContainer!, progress!, "none");
+      openLoading.value = false;
+    } else if (data.status === "delete" || event.data === "delete") {
+      // Handle mesh deletion
       tumourVolume.value = 0;
-      if (!!segementTumour3DModel) copperScene.scene.remove(segementTumour3DModel);
+      if (segementTumour3DModel) {
+        copperScene.scene.remove(segementTumour3DModel);
+      }
       segementTumour3DModel = undefined;
-
       copperScene.scene.remove(ribSphere);
       copperScene.scene.remove(skinSphere);
-
       initPanelValue();
-    } else {
-      const volumeJson = JSON.parse(event.data);
-      tumourVolume.value = Math.ceil(volumeJson.volume) / 1000;
+      openLoading.value = false;
     }
-    clearInterval(socketTimer as NodeJS.Timeout);
-  } else {
-    if(!!maskTumourObjData.value.maskTumourObjUrl){
-      console.log("remove old mesh");
-      URL.revokeObjectURL(maskTumourObjData.value.maskTumourObjUrl)
-    }
-    
-    if (typeof maskTumourObjData.value ===  "boolean"){
-      maskTumourObjData.value = {maskTumourObjUrl: "", meshVolume: 0};
-    }
-    
-    const blob = new Blob([event.data], { type: "model/obj" });
-    const url = URL.createObjectURL(blob);
-    maskTumourObjData.value.maskTumourObjUrl = url;
-    if(!!preTumourShpere){
-      (copperScene as Copper.copperScene).scene.remove(preTumourShpere);
-      preTumourShpere = undefined;
-    }
-    loadSegmentTumour(url)
-    switchAnimationStatus(loadingContainer!, progress!, "none");
+  } catch (e) {
+    // Handle non-JSON messages (backward compatibility)
+    console.log("Received non-JSON message:", event.data);
+    openLoading.value = false;
   }
-  openLoading.value = false;
 }
 
 function manageEmitters() {
@@ -313,18 +327,16 @@ function manageEmitters() {
   // When left panel draw sphere, then the right panel need automatically update the sphere tumour
   emitter.on("SegmentationTrial:DrawSphereFunction", emitterOnDrawSphereFunction)
   // When nav bar toggle breast visibility
-  emitter.on("Common:ToggleBreastVisibility", emitterOnToggleBreastVisibility)
+  emitter.on("Common:ToggleRightModelVisibility", emitterOnToggleBreastVisibility)
 }
 
 const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
   // 1. clear previous meshes and clear state
   clearModelsAndStates()
-  // 2. request data
-  const case_infos: ICaseDetails = caseDetails;
-  const case_detail = findCurrentCase(
-    case_infos.details,
-    case_infos.currentCaseId
-  );
+
+  // 2.0 Initialize WebSocket connection for this case
+  initSocket(caseDetails.currentCaseId);
+
   // 2.1 Get currentCasename and get the init data
   await getInitDataOnceCaseSwitched(caseDetails);
 
@@ -341,7 +353,7 @@ const emitterOnResizeCopperSceneWhenNavChanged = () => {
 const emitterOnSyncTumourModelButtonClicked = () => {
   switchAnimationStatus(loadingContainer!, progress!, "flex");
   openLoading.value = true;
-  socketTimer = requestSocketUpdateTumourModel();
+  // WebSocket will notify when OBJ conversion is complete
 }
 const emitterOnRegisterButtonStatusChanged = (data: ILeftRightData) => {
   const {url, register} = data;
@@ -429,19 +441,28 @@ const updateNrrdMeshToCopperScene = (updatedNrrdMesh:Copper.nrrdMeshesType, upda
 
 const getInitDataOnceCaseSwitched = async (caseDetails: ICaseDetails)=>{
   
-  currentCasename.value = caseDetails.currentCaseId;
+  currentCasename.value = caseDetails.currentCaseName;
   // get mask nrrd blob url
   maskNrrd.value = caseDetails.maskNrrd;
-  // get mask tumour obj url
-  await getMaskTumourObjData(currentCasename.value);
+  // get mask tumour obj url, if the obj size not 0
+  currentCaseDetails = caseDetails.details.find((detail:IDetails)=> detail.name === currentCasename.value)!;
+  const objSize = currentCaseDetails.output.mask_obj_size;
+  const maskUrl = currentCaseDetails.output.mask_obj_path;
+
+  if (!!objSize && Number(objSize) > 0){
+    const file = await useSingleFile(maskUrl);
+    if (!!file){
+      maskTumourObj.value = URL.createObjectURL(file);
+    }
+  }
   // get breast mesh obj url
-  await getBreastMeshObjUrl(currentCasename.value);
+  // await getBreastMeshObjUrl(currentCasename.value);
   // get ribcage points
-  await getRibPoints(currentCasename.value);
-  // get skin points
-  await getSkinPoints(currentCasename.value);
-  // get nipple points
-  await getNipplePoints(currentCasename.value);
+  // await getRibPoints(currentCasename.value);
+  // // get skin points
+  // await getSkinPoints(currentCasename.value);
+  // // get nipple points
+  // await getNipplePoints(currentCasename.value);
 }
 
 
@@ -478,26 +499,26 @@ const coreLoadNrrdImageOnceGetCaseDetail = async (nrrdUrl:string, imageType:"ori
       rightPanelCoreRef.value?.resetNrrdImageView(loadNrrdMeshes);
 
 
-      if(!!skinPoints.value){
-        const skinPointCloud = skinPoints.value as IRibSkinPoints
-        processedSkinPoints = processPointsCloud(skinPointCloud["Datapoints"] as number[][], nrrdData.bias)
-        skinTree = createKDTree(processedSkinPoints);
-      }
-      if(!!ribPoints.value){
-        const ribPointCloud = ribPoints.value as IRibSkinPoints
-        processedRibPoints = processPointsCloud(ribPointCloud["Datapoints"] as number[][], nrrdData.bias)
-        ribTree = createKDTree(processedRibPoints);
-      }
+      // if(!!skinPoints.value){
+      //   const skinPointCloud = skinPoints.value as IRibSkinPoints
+      //   processedSkinPoints = processPointsCloud(skinPointCloud["Datapoints"] as number[][], nrrdData.bias)
+      //   skinTree = createKDTree(processedSkinPoints);
+      // }
+      // if(!!ribPoints.value){
+      //   const ribPointCloud = ribPoints.value as IRibSkinPoints
+      //   processedRibPoints = processPointsCloud(ribPointCloud["Datapoints"] as number[][], nrrdData.bias)
+      //   ribTree = createKDTree(processedRibPoints);
+      // }
 
       // 2.3 Load breast model, nipple, skin, ribcage, 3d model
-      loadBreastNipplePoints(nipplePoints.value as INipplePoints);
-      loadBreastModel(breastMeshObjUrl.value as string);
+      // loadBreastNipplePoints(nipplePoints.value as INipplePoints);
+      // loadBreastModel(breastMeshObjUrl.value as string);
       // 2.4 Load tumour obj model if has
-      if(!!maskTumourObjData.value){
-        tumourVolume.value = Math.ceil(maskTumourObjData.value.meshVolume as number) / 1000;
+      if(!!maskTumourObj.value){
+        // tumourVolume.value = Math.ceil(maskTumourObjData.value.meshVolume as number) / 1000;
         // maskMeshObj.value.maskMeshObjUrl as string
         // 2.4 load tumour model
-        loadSegmentTumour(maskTumourObjData.value.maskTumourObjUrl as string)
+        loadSegmentTumour(maskTumourObj.value)
       }else{
         requestUpdateSliderSettings();
       }
@@ -714,7 +735,7 @@ onUnmounted(() => {
   emitter.off("Segmentation:SyncTumourModelButtonClicked", emitterOnSyncTumourModelButtonClicked);
   emitter.off("Segmentation:RegisterButtonStatusChanged", emitterOnRegisterButtonStatusChanged);
   emitter.off("SegmentationTrial:DrawSphereFunction", emitterOnDrawSphereFunction)
-  emitter.off("Common:ToggleBreastVisibility", emitterOnToggleBreastVisibility)
+  emitter.off("Common:ToggleRightModelVisibility", emitterOnToggleBreastVisibility)
 });
 </script>
 

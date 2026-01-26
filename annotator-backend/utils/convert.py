@@ -3,46 +3,26 @@ import json
 import SimpleITK as sitk
 from skimage.measure import marching_cubes
 import nibabel as nib
-from .tools import get_file_path, getMaskData
+from .tools import get_file_path, getJsonData
 from .setup import Config, TumourData
+from models.db_model import CaseOutput
+from pathlib import Path
+import requests
+import tempfile
+import os
 
 
-def convert_json_to_obj(patient_id):
+def convert_json_to_obj(case_output: CaseOutput):
     """
     convert nii file to obj file
-    :param patient_id:
+    :param case_output:
     :return:
     """
-    json_source = get_file_path(patient_id, "json", "mask.json")
-    dest = get_file_path(patient_id, "obj", "mask.obj")
+    json_source = Path(case_output.mask_json_path)
+    dest = Path(case_output.mask_obj_path)
 
-    if json_source is None:
-        print(f"mask.json path is None, Check your manifest.xlsx file's patient_id {patient_id}")
-        Config.Updated_Mesh = True
-        return
-    elif dest is None:
-        print(f"mask.obj path is None, Check your manifest.xlsx file's patient_id {patient_id}")
-        Config.Updated_Mesh = True
-        return
-
-    if Config.MASKS == None:
-        if Config.ClearAllMask:
-            print("Clear all masks by frontend, So set the  Config.Updated_Mesh to True.")
-            Config.Updated_Mesh = True
-            return
-        else:
-            # with open(json_source) as user_file:
-            #     file_contents = user_file.read()
-            #     parsed_json = json.loads(file_contents)
-            #     user_file.close()
-            getMaskData(json_source)
-            if Config.MASKS["hasData"] == False:
-                print("No mask data has been found, So set the  Config.Updated_Mesh to True.")
-                Config.Updated_Mesh = True
-                return
-            parsed_json = Config.MASKS["label1"]
-    else:
-        parsed_json = Config.MASKS["label1"]
+    mask_json = getJsonData(json_source)
+    parsed_json = mask_json["label1"]
 
     images = []
     width = parsed_json[0]["width"]
@@ -63,7 +43,6 @@ def convert_json_to_obj(patient_id):
     origin = parsed_json[0]["spaceOrigin"]
     count = np.count_nonzero(arr > 0)
     TumourData.volume = count * spacing[0] * spacing[1] * spacing[2]
-    Config.MASKS['volume'] = TumourData.volume
     try:
         verts, faces, normals, values = marching_cubes(arr)
         # voxel grid coordinates to world coordinates: verts * voxel_size + origin
@@ -87,9 +66,9 @@ def convert_json_to_obj(patient_id):
 
             print("finish write obj")
         out_file.close()
+        case_output.mask_obj_size = dest.stat().st_size
         # tell websocket the mesh is ready send to frontend
         print("Finish convert mask to obj, So set the  Config.Updated_Mesh to True.")
-        Config.Updated_Mesh = True
 
     except RuntimeError as e:
         try:
@@ -101,21 +80,18 @@ def convert_json_to_obj(patient_id):
             print(f"fail to delete file!")
 
 
-def convert_to_nii(patient_id):
+def convert_to_nii(case_output: CaseOutput, pre_nrrd: str):
     """
     convert pixels to nii file
-    :param patient_id: case name
+    :param case_output: CaseOutput
+    :param pre_nrrd: str
     :return:
     """
-    print("start converting...")
-    nrrd_path = get_file_path(patient_id, "nrrd", "contrast_0.nrrd")
-    if nrrd_path is None:
-        nrrd_path = get_file_path(patient_id, "nrrd", "c0.nrrd")
-    mask_path = get_file_path(patient_id, "json", "mask.json")
-    nii_path = get_file_path(patient_id, "nii.gz", "mask.nii.gz")
-    nii_path_2 = get_file_path(patient_id, "nii.gz", "mask_2.nii.gz")
-    nii_path_3 = get_file_path(patient_id, "nii.gz", "mask_3.nii.gz")
+    print("start converting mask to nii...")
+    nrrd_path = pre_nrrd
 
+    mask_path = Path(case_output.mask_json_path)
+    nii_path = Path(case_output.mask_nii_path)
 
     if nrrd_path is None:
         print("contrast_0.nrrd path is None")
@@ -127,23 +103,50 @@ def convert_to_nii(patient_id):
         print("mask.nii.gz path is None")
         return
 
-    origin_nrrd_image = sitk.ReadImage(nrrd_path)
-    headerKeys = origin_nrrd_image.GetMetaDataKeys()
+    temp_file = None
+    try:
+        # Check if pre_nrrd is a URL
+        if nrrd_path.startswith("http://") or nrrd_path.startswith("https://"):
+            print(f"Downloading NRRD from {nrrd_path}...")
+            response = requests.get(nrrd_path, stream=True)
+            response.raise_for_status()
+            
+            # Create a temporary file with .nrrd extension
+            temp_fd, temp_path = tempfile.mkstemp(suffix=".nrrd")
+            with os.fdopen(temp_fd, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            nrrd_path = temp_path
+            temp_file = temp_path
+            print(f"Downloaded to temporary file: {temp_file}")
 
-    with open(mask_path) as user_file:
-        file_contents = user_file.read()
-        parsed_json_mask = json.loads(file_contents)
-    parsed_json = parsed_json_mask["label1"]
-    parsed_json_2 = parsed_json_mask["label2"]
-    parsed_json_3 = parsed_json_mask["label3"]
-    for file_index in range(3):
-        # Save the image as a NIfTI file
-        if file_index == 0:
-            convert_core(parsed_json, nii_path, headerKeys, origin_nrrd_image)
-        # elif file_index == 1:
-        #     convert_core(parsed_json_2, nii_path_2, headerKeys, origin_nrrd_image)
-        # elif file_index == 2:
-        #     convert_core(parsed_json_3, nii_path_3, headerKeys, origin_nrrd_image)
+        origin_nrrd_image = sitk.ReadImage(nrrd_path)
+        headerKeys = origin_nrrd_image.GetMetaDataKeys()
+
+        with open(mask_path) as user_file:
+            file_contents = user_file.read()
+            parsed_json_mask = json.loads(file_contents)
+        parsed_json = parsed_json_mask["label1"]
+        parsed_json_2 = parsed_json_mask["label2"]
+        parsed_json_3 = parsed_json_mask["label3"]
+        for file_index in range(3):
+            # Save the image as a NIfTI file
+            if file_index == 0:
+                convert_core(parsed_json, nii_path, headerKeys, origin_nrrd_image)
+            # elif file_index == 1:
+            #     convert_core(parsed_json_2, nii_path_2, headerKeys, origin_nrrd_image)
+            # elif file_index == 2:
+            #     convert_core(parsed_json_3, nii_path_3, headerKeys, origin_nrrd_image)
+    
+    finally:
+        # Clean up temporary file if it was created
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+                print(f"Removed temporary file: {temp_file}")
+            except OSError as e:
+                print(f"Error removing temporary file {temp_file}: {e}")
 
 
 def convert_core(parsed_json, nii_path, headerKeys, origin_nrrd_image):

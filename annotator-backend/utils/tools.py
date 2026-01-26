@@ -6,6 +6,7 @@ from .setup import Config
 from pathlib import Path
 from zipfile import ZipFile
 from io import BytesIO
+from models.db_model import User, Assay, Case, CaseInput, CaseOutput
 import os
 import torch
 import numpy as np
@@ -57,19 +58,6 @@ def check_file_exist(patient_id, filetype, filename):
         else:
             return file_path.exists()
     return False
-
-
-def write_data_to_json(patient_id, masks):
-    # todo 1: find mask.json path base on patient_id
-    try:
-        mask_json_path = get_file_path(patient_id, "json", "mask.json")
-        if mask_json_path is not None:
-            Config.MASK_FOLDER_PATH = mask_json_path.parent
-            Config.MASK_FILE_PATH = mask_json_path
-            Config.MASKS = masks
-            saveMaskData()
-    except:
-        print("File not found!")
 
 
 def get_file_path(patient_id, file_type, file_name):
@@ -130,21 +118,6 @@ def save_sphere_points_to_json(patient_id, data):
     return True
 
 
-def replace_data_to_json(patient_id, slice):
-    """
-    :param patient_id: case name
-    :param slice: a single slice mask pixels
-    """
-    mask_json_path = get_file_path(patient_id, "json", "mask.json")
-    index = slice.sliceId
-    label = slice.label
-    if Config.MASKS == None:
-        if mask_json_path is not None and mask_json_path.is_file():
-            getMaskData(mask_json_path)
-    Config.MASKS[label][index]["data"] = slice.mask
-    Config.MASKS["hasData"] = True
-
-
 def selectNrrdPaths(patient_id, file_type, limit):
     """
     :param patient_id: name
@@ -184,51 +157,35 @@ def getJsonData(path):
         return json.loads(file.read().decode('utf-8'))
 
 
-def getMaskData(path):
+def replace_data_to_json(case_output: CaseOutput, slice_json):
     """
-    :param path: A mask.json file full path
-    :return:
+    :param case_output: CaseOutput
+    :param slice_json: a single slice mask pixels
     """
-    Config.MASK_FILE_PATH = path
-    if Config.MASKS is None:
-        Config.MASKS = getJsonData(path)
-    return Config.MASKS
+    json_path = Path(case_output.mask_json_path)
+    index = slice_json.sliceId
+    label = slice_json.label
+    if json_path.exists():
+        mask_json = getJsonData(json_path)
+        mask_json[label][index]["data"] = slice_json.mask
+        mask_json["hasData"] = True
+        save_mask_data(case_output, mask_json)
+    else:
+        print("replace failed: mask json file does not exist")
 
 
-def zipNrrdFiles(name, caseType):
-    """
-    :param name: patientId | caseId
-    :param caseType: "origin" | "registration"
-    :return:
-    """
-    # TODO 1: get all nrrd file paths
-    file_paths = selectNrrdPaths(name, "nrrd", caseType)
-    valide_path = Config.BASE_PATH / file_paths[0]
-    if (valide_path.exists() is False) and (caseType == "registration"):
-        file_paths = selectNrrdPaths(name, "nrrd", "origin")
-    if caseType == "registration":
-        # TODO 2: get mask.json file path
-        json_df = Config.METADATA[
-            (Config.METADATA["file type"] == "json") & (Config.METADATA["Additional Metadata"] == name)]
-        file_paths.extend(list(json_df["filename"]))
-    # TODO 3: add base url to these paths
-    file_paths = [Config.BASE_PATH / nrrd_path for nrrd_path in file_paths]
-    # TODO 4: zip nrrd and json files
-    with ZipFile('nrrd_files.zip', 'w') as zip_file:
-        for file_path in file_paths:
-            zip_file.write(file_path)
-    Config.Current_Case_Name = name
-
-
-def saveMaskData():
+def save_mask_data(case_output: CaseOutput, masks):
     """
     save mask.json to local drive
     """
-    if Config.MASK_FILE_PATH != "":
-        with open(Config.MASK_FILE_PATH, "wb") as file:
-            # json.dump(MASKS, file)
-            file.write(json.dumps(Config.MASKS).encode('utf-8'))
-        Config.MASKS = None
+    json_path = Path(case_output.mask_json_path)
+
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(masks, f, ensure_ascii=False)
+
+    case_output.mask_json_size = json_path.stat().st_size
 
 
 def init_tumour_position_json(path):
@@ -271,11 +228,3 @@ def init_tumour_position_json(path):
     with open(path, 'w') as json_file:
         json.dump(tumour_position, json_file, indent=4)
 
-
-def save():
-    start_time = time.time()
-    if Config.MASKS is not None:
-        saveMaskData()
-    end_time = time.time()
-    run_time = end_time - start_time
-    print("save json cost：{:.2f}s".format(run_time))

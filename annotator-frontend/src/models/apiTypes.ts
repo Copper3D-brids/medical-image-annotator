@@ -7,17 +7,29 @@ export interface INrrdCaseNames {
   [proName: string]: any;
 }
 export interface IDetails {
+  id: string | number;
   name: string;
-  masked: false;
-  has_mesh: boolean;
-  file_paths: {
-    origin_nrrd_paths: string[];
-    registration_nrrd_paths: string[];
-    segmentation_breast_points_paths: string[];
-    segmentation_breast_model_paths: string[];
-    segmentation_manual_mask_paths: string[];
-    segmentation_manual_3dobj_paths: string[];
-  };
+  assay_uuid: string;
+  input: IInput;
+  output: IOutput;
+}
+interface IInput {
+  contrast_pre: string;
+  contrast_1: string;
+  contrast_2: string;
+  contrast_3: string;
+  contrast_4: string;
+  registration_pre: string;
+  registration_1: string;
+  registration_2: string;
+  registration_3: string;
+  registration_4: string;
+}
+interface IOutput {
+  mask_json_path: string;
+  mask_json_size: string | number;
+  mask_obj_path: string;
+  mask_obj_size: string | number;
 }
 export interface IStoredMasks {
   label1: IExportMask[];
@@ -26,7 +38,7 @@ export interface IStoredMasks {
   hasData: false;
 }
 export interface IExportMask {
-  caseId?: number;
+  caseName?: string;
   sliceIndex?: number;
   dataFormat?: string;
   width?: number;
@@ -37,25 +49,25 @@ export interface IExportMask {
   [proName: string]: any;
 }
 export interface IExportMasks {
-  caseId: string;
+  caseId: string | number;
   masks: IStoredMasks;
 }
 export interface IReplaceMask {
-  caseId: string;
+  caseId: string | number;
   sliceId: number;
   label: string;
   mask: number[];
 }
 export interface ISaveSphere {
-  caseId: string;
+  caseId: string | number;
   sliceId: number;
   origin: number[];
   spacing: number[];
   sphereRadiusMM: number;
   sphereOriginMM: number[];
 }
-export interface ITumourPositionNNMask{
-  caseId: string;
+export interface ITumourPositionNNMask {
+  caseId: string | number;
   position: Array<number>;
 }
 export interface ISaveTumourPosition {
@@ -82,6 +94,7 @@ export interface ILoadUrls {
   [proName: string]: any;
 }
 export interface ICaseDetails {
+  currentCaseName: string;
   currentCaseId: string;
   details: Array<IDetails>;
   maskNrrd: string;
@@ -92,7 +105,7 @@ export interface ITumourCenterCaseDetails {
   nrrdUrl: string;
   tumourWindow?: ITumourWindow;
   report?: ITumourStudyReport;
-} 
+}
 
 export interface IRegRquest {
   name: string;
@@ -131,20 +144,20 @@ export interface IRibSkinPoints {
 }
 
 export interface ITumourWindow {
-  bounding_box_max_point:{
-    x:number;
-    y:number;
-    z:number
+  bounding_box_max_point: {
+    x: number;
+    y: number;
+    z: number
   },
-  bounding_box_min_point:{
-    x:number;
-    y:number;
-    z:number
+  bounding_box_min_point: {
+    x: number;
+    y: number;
+    z: number
   },
-  center:{
-    x:number;
-    y:number;
-    z:number
+  center: {
+    x: number;
+    y: number;
+    z: number
   }
 }
 
@@ -155,7 +168,7 @@ export interface IRequests {
 }
 
 export interface IStudyDetails {
-  position: ICommXYZ| null;
+  position: ICommXYZ | null;
   distance: string;
   start: string | number;
   end: string | number;
@@ -170,9 +183,9 @@ export interface ITumourStudyClockFace {
 }
 
 export interface ITumourStudyReport {
-  nipple:IStudyDetails;
+  nipple: IStudyDetails;
   skin: IStudyDetails;
-  ribcage:IStudyDetails;
+  ribcage: IStudyDetails;
   clock_face: ITumourStudyClockFace;
   start: string | number;
   end: string | number;
@@ -215,10 +228,10 @@ export interface IKeyboardSettings {
   [key: string]: any;
 }
 
-export interface ILeftCoreCopperInit { 
-  appRenderer: Copper.copperRenderer; 
-  nrrdTools: Copper.NrrdTools; 
-  scene: Copper.copperScene 
+export interface ILeftCoreCopperInit {
+  appRenderer: Copper.copperRenderer;
+  nrrdTools: Copper.NrrdTools;
+  scene: Copper.copperScene
 }
 
 export interface IToolSphereData {
@@ -249,8 +262,8 @@ export interface IToolGetSliceNumber {
   contrastindex: number;
 }
 export interface IToolGetMouseDragContrastMove {
-  step:number, 
-  towards:"horizental"|"vertical"
+  step: number,
+  towards: "horizental" | "vertical"
 }
 
 export interface IDashboardCategory {
@@ -271,13 +284,13 @@ export interface IDashboardWorkflow {
 }
 
 interface IWorkflowInput {
-  input: { category: string; name: string; }; 
+  input: { category: string; name: string; };
   datasetSelectedUUID: string;
   sampleSelectedType: string;
 }
-interface IWorkflowOutput { 
-  output: { category: string; name: string; }, 
-  datasetName: string, 
+interface IWorkflowOutput {
+  output: { category: string; name: string; },
+  datasetName: string,
   sampleName: string
 }
 
@@ -290,7 +303,7 @@ export interface IAssayDetails {
     inputs: IWorkflowInput[];
     outputs: IWorkflowOutput[];
   };
-  numberOfParticipants: number|string;
+  numberOfParticipants: number | string;
   isAssayReadyToLaunch: boolean;
 }
 
@@ -304,12 +317,39 @@ export interface IAssayDataset {
   name: string;
 }
 
-export interface IClinicalReportViewerDetail{
+export interface IClinicalReportViewerDetail {
   uuid: string;
   date: string;
 }
 
-export interface IProjectDetail{
+export interface IProjectDetail {
   seekId: string;
   title: string
+}
+
+export interface IToolConfig {
+  user_info: {
+    uuid: string;
+  };
+  assay_info: {
+    uuid: string;
+    name: string;
+    cohorts: string[];
+    datasets: string[];
+  };
+  system: {
+    minio: {
+      public_path: string;
+    };
+  };
+}
+
+export interface IToolConfigResponse {
+  status: number;
+  assay_uuid: string;
+}
+
+export interface IAuth {
+  user_uuid: string;
+  assay_uuid: string;
 }

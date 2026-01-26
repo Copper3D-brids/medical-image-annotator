@@ -46,10 +46,12 @@
 
 <script setup lang="ts">
 import Switcher from "@/components/commonBar/Switcher.vue";
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, onBeforeMount } from "vue";
 import { useSegmentationCasesStore } from "@/store/app";
 import { storeToRefs } from "pinia";
 import emitter from "@/plugins/custom-emitter";
+import { useAppConfig } from "@/plugins/hooks/config";
+import { useCases } from "@/plugins/hooks/cases";
 
 type selecedType = {
   [key: string]: boolean;
@@ -58,8 +60,9 @@ type resultType = {
   [key: string]: any;
 };
 
+const { config } = useAppConfig();
+const { getCasesInfo } = useCases();
 const { allCasesDetails } = storeToRefs(useSegmentationCasesStore());
-const { getAllCasesDetails } = useSegmentationCasesStore();
 const disableSelectCase = ref(false);
 const disableSelectContrast = ref(true);
 const contrastValue = ref<string[]>([]);
@@ -78,6 +81,10 @@ const switchDisabled = ref<boolean>(true);
 const switchLable = ref<"on" | "off">("on");
 
 let contrastState: selecedType;
+
+onBeforeMount(() => {
+  getCasesInfo(config!)
+});
 
 onMounted(() => {
   manageEmitters();

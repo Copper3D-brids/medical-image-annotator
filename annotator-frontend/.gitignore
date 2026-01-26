@@ -30,3 +30,5 @@ test
 ts
 
 .env
+
+src/assets/tool_config.json

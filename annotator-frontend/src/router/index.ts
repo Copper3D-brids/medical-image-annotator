@@ -5,7 +5,6 @@ import {
   createWebHashHistory,
 } from "vue-router";
 import SegmentationLayout from "@/layouts/segmentation-layout/Default.vue";
-import CalculationLayout from "@/layouts/calculation-layout/Default.vue";
 
 const routes = [
   {

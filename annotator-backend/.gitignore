@@ -18,3 +18,10 @@ configs_old.ini
 configs_public_demo.ini
 data/*
 !data/.gitkeep
+
+# database
+annotator.db
+outputs/*
+!outputs/.gitkeep
+manual_init_db.py
+test_db_schema.py
