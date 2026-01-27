@@ -24,6 +24,12 @@ export interface IDetails {
     assay_uuid: string;
     input: IInput;
     output: IOutput;
+    masked?: boolean;
+    file_paths?: {
+        registration_nrrd_paths: string[];
+        origin_nrrd_paths: string[];
+        segmentation_manual_mask_paths: string[];
+    };
 }
 
 export interface INrrdCaseNames {
@@ -49,5 +55,5 @@ export interface ICaseDetails {
 }
 
 export interface ILoadUrls {
-  [proName: string]: any;
+    [proName: string]: any;
 }

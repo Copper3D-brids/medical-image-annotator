@@ -26,7 +26,51 @@ export interface IModelsDeps {
 /**
  * Composable for right panel model management
  */
-export function useRightPanelModels(deps: IModelsDeps) {
+
+/**
+ * Return type for useRightPanelModels composable
+ */
+export interface IUseRightPanelModelsReturn {
+    allRightPanelMeshes: Ref<Array<THREE.Object3D>>;
+    segementTumour3DModel: Ref<THREE.Group | THREE.Mesh | undefined>;
+    breast3DModel: Ref<THREE.Group | undefined>;
+    preTumourSphere: Ref<THREE.Mesh | undefined>;
+    tumourSliceIndex: Ref<ICommXYZ>;
+    nippleSphereL: THREE.Mesh;
+    nippleSphereR: THREE.Mesh;
+    updateNrrdMeshToCopperScene: (
+        updatedNrrdMesh: Copper.nrrdMeshesType,
+        updatedNrrdSlice: Copper.nrrdSliceType,
+        recordSliceIndex?: ICommXYZ
+    ) => void;
+    resetSliceIndex: (sliceIndex: ICommXYZ) => void;
+    loadSegmentTumour: (
+        tomourUrl: string,
+        onLoaded: (position: THREE.Vector3) => void
+    ) => void;
+    loadBreastModel: (url: string) => void;
+    drawPreviewSphere: (
+        sphereData: ISaveSphere,
+        correctedOrigin: number[],
+        onPositionSet: (position: THREE.Vector3) => void
+    ) => void;
+    removeOldMeshes: () => void;
+    toggleBreastVisibility: (visible: boolean) => void;
+    getNrrdData: () => {
+        loadNrrdMeshes: Copper.nrrdMeshesType;
+        loadNrrdSlices: Copper.nrrdSliceType;
+    };
+    setNrrdData: (
+        meshes: Copper.nrrdMeshesType,
+        slices: Copper.nrrdSliceType,
+        imageType: "register" | "origin"
+    ) => void;
+}
+
+/**
+ * Composable for right panel model management
+ */
+export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsReturn {
     const { copperScene, nrrdBias } = deps;
 
     /** All meshes added to right panel for cleanup */

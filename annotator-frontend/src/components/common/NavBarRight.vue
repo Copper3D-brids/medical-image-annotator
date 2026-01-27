@@ -1,8 +1,8 @@
 <template>
-  <div class="nav dark guide-right-nav-tool" ref="nav_container">
-    <div class="content" id="right_nav_bar" @dblclick.stop>
+  <div class="nav dark guide-right-nav-tool" ref="nav_container" :class="{ compact: isCompact }">
+    <div v-show="panelWidth >= 420" class="content" id="right_nav_bar" @dblclick.stop>
 
-      <div v-show="showDragSlider && panelWidth >= 600 ? true : false" :class="panelWidth >1000 ? 'mx-6 px-6 slider-lg':'slider-sm'">
+      <div v-show="showDragSlider && !isCompact && panelWidth >= 600" :class="panelWidth >1000 ? 'mx-6 px-6 slider-lg':'slider-sm'">
         <v-slider
         
         class="mt-5"
@@ -70,7 +70,7 @@
  * @listens Common:ToggleAppTheme - Updates dark/light mode styling
  * @listens Segmentation:CaseDetails - Disables buttons during case loading
  */
-import { ref, onMounted, toRefs, reactive, onUnmounted, watch} from "vue";
+import { ref, onMounted, toRefs, reactive, onUnmounted, watch, computed} from "vue";
 import sagittalImg_white from "@/assets/images/person_left_view_white.png";
 import axialImg_white from "@/assets/images/person_top_down_white.png";
 import coronalImg_white from "@/assets/images/person_anterior_white.png";
@@ -110,6 +110,11 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const { panelWidth } = toRefs(reactive(props));
+
+const isCompact = computed(() => {
+  // If panelWidth is very small, we switch to compact mode (hide slider, reduce padding)
+  return panelWidth.value < 600;
+});
 
 /** Whether to show the slice navigation slider */
 const showDragSlider = ref(false)
@@ -379,6 +384,21 @@ onUnmounted(() => {
   box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.25),
     inset -5px -5px 10px rgba(255, 255, 255, 0.1);
 }
+
+/* Compact Mode Styles */
+.compact .content {
+  padding: 0 5px;
+}
+.compact .arrows span {
+  padding: 5px;
+  margin: 2px;
+  min-width: 30px;
+  font-size: 1em;
+}
+.compact .switch_font {
+  font-size: 0.8em;
+}
+
 
 .disabled {
   pointer-events: none; 

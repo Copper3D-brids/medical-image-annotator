@@ -14,7 +14,7 @@ import { ref, onBeforeMount} from "vue";
 import LayoutTwoPanels from "@/components/viewer/LayoutTwoPanels.vue";
 import LeftPanel from "./LeftPanelController.vue";
 import RightPanel from "./RightPanelController.vue";
-import {useToolConfig} from "@/plugins/api";
+import {useToolConfig} from "@/plugins/api/index";
 import { useSegmentationCasesStore } from "@/store/app";
 // need to remove this after testing
 import toolConfig from "@/assets/tool_config.json";

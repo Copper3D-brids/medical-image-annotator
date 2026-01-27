@@ -49,7 +49,7 @@ import "copper3d/dist/css/style.css";
 import * as Copper from "copper3d";
 import { onMounted, ref, watch, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
-import { useSingleFile } from "@/plugins/api";
+import { useSingleFile } from "@/plugins/api/index";
 import {
   ICaseDetails,
   IDetails,

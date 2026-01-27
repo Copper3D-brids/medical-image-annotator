@@ -17,7 +17,7 @@ import {
     IToolCalculateSpherePositionsData,
 } from "@/models";
 import { customRound, distance3D } from "@/plugins/view-utils/utils-left";
-import { useSaveSphereStore } from "@/store/app";
+import { useSaveSphere } from "@/plugins/api/index";
 import emitter from "@/plugins/custom-emitter";
 
 /**
@@ -33,7 +33,6 @@ export interface IDistanceCalculationDeps {
  */
 export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
     const { nrrdTools, currentCaseName } = deps;
-    const { sendSaveSphere } = useSaveSphereStore();
 
     /** Distance to Skin in mm */
     const dts = ref(0);
@@ -63,7 +62,7 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
         };
 
         emitter.emit("SegmentationTrial:DrawSphereFunction", sphereData);
-        await sendSaveSphere(sphereData);
+        await useSaveSphere(sphereData);
     };
 
     /**

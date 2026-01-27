@@ -16,8 +16,10 @@ import {
     IReplaceMask,
     IToolMaskData,
     IDetails,
+    INrrdCaseNames,
+    ICaseUrls,
 } from "@/models";
-import { useSingleFile, useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks } from "@/plugins/api";
+import { useSingleFile, useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks } from "@/plugins/api/index";
 import { convertInitMaskData } from "@/plugins/worker";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import emitter from "@/plugins/custom-emitter";
@@ -32,9 +34,9 @@ export interface IMaskOperationsDeps {
     loadBarMain: Ref<Copper.loadingBarType | undefined>;
     currentCaseDetail: Ref<IDetails | undefined>;
     currentCaseName: Ref<string>;
-    allCasesDetails: Ref<{ details: IDetails[] } | null>;
-    originUrls: { jsonUrl: string };
-    regiterUrls: { jsonUrl: string };
+    allCasesDetails: Ref<INrrdCaseNames | undefined>;
+    originUrls: ICaseUrls;
+    regiterUrls: ICaseUrls;
 }
 
 /**

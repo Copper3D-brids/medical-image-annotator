@@ -1,5 +1,7 @@
 import { IRequests, IDetails } from "@/models";
 import { ITumourStudyAppDetail } from "@/models";
+import { customRound, distance3D } from "@/plugins/utils";
+export { customRound, distance3D };
 
 export const findRequestUrls = (
   details: Array<IDetails>,
@@ -9,7 +11,7 @@ export const findRequestUrls = (
   const currentCaseDetails = details.filter((item) => item.name === caseId)[0];
   const requests: Array<IRequests> = [];
   if (type === "registration") {
-    currentCaseDetails.file_paths.registration_nrrd_paths.forEach(
+    currentCaseDetails.file_paths?.registration_nrrd_paths.forEach(
       (filepath) => {
         requests.push({
           url: "/single-file",
@@ -18,7 +20,7 @@ export const findRequestUrls = (
       }
     );
   } else if (type === "origin") {
-    currentCaseDetails.file_paths.origin_nrrd_paths.forEach((filepath) => {
+    currentCaseDetails.file_paths?.origin_nrrd_paths.forEach((filepath) => {
       requests.push({
         url: "/single-file",
         params: { path: filepath },
@@ -27,7 +29,7 @@ export const findRequestUrls = (
   }
 
   if (currentCaseDetails.masked) {
-    currentCaseDetails.file_paths.segmentation_manual_mask_paths.forEach(
+    currentCaseDetails.file_paths?.segmentation_manual_mask_paths.forEach(
       (filepath) => {
         requests.push({
           url: "/single-file",
@@ -40,22 +42,7 @@ export const findRequestUrls = (
 };
 
 
-export function customRound(num: number) {
-  const decimalPart = num - Math.floor(num);
 
-  if (decimalPart > 0.5) {
-    return Math.ceil(num);
-  } else {
-    return Math.floor(num);
-  }
-}
-
-export function distance3D(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number) {
-  let dx = x2 - x1;
-  let dy = y2 - y1;
-  let dz = z2 - z1;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
 
 export const getReportIncompleteCases = (
   details: Array<ITumourStudyAppDetail>

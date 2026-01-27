@@ -9,7 +9,7 @@
  * @module composables/right-panel/useWebSocketSync
  */
 import { ref, type Ref } from "vue";
-import { useSingleFile } from "@/plugins/api";
+import { useSingleFile } from "@/plugins/api/index";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import * as Copper from "copper3d";
 import * as THREE from "three";

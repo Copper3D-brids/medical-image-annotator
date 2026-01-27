@@ -1,25 +1,51 @@
 <template>
-  <div class="nav dark guide-left-nav-tool" ref="nav_container" >
-    <div class="content" id="left_nav_bar" @dblclick.stop>
-      <el-slider
-        v-model="sliceNum"
-        :max="p.max"
-        @input="onChangeSlider"
-        @click.stop
-        show-input
-        id="left_nav_slider"
-        class="guide-left-slider"
-      />
+  <div  class="nav dark guide-left-nav-tool" ref="nav_container" :class="{ compact: isCompact }">
+    <div v-show="panelWidth >= 300" class="content" id="left_nav_bar" @dblclick.stop>
+      <div class="d-flex align-center flex-grow-1" v-if="!isCompact">
+        <v-slider
+          v-model="sliceNum"
+          :max="p.max"
+          :min="p.min"
+          thumb-label
+          density="compact"
+          hide-details
+          color="#f4511e"
+          track-color="grey"
+          class="guide-left-slider mr-4"
+          @update:modelValue="onChangeSlider"
+          @click.stop
+        />
+        <v-text-field
+          v-model.number="sliceNum"
+          type="number"
+          density="compact"
+          hide-details
+          variant="outlined"
+          style="max-width: 140px;"
+          class="centered-input"
+          :max="p.max"
+          :min="p.min"
+          @update:modelValue="onChangeSlider"
+          @click.stop
+        >
+          <template v-slot:prepend>
+             <v-btn icon="mdi-minus" density="compact" variant="text" size="small" @click="sliceNum > p.min && (sliceNum--, onChangeSlider())"></v-btn>
+          </template>
+          <template v-slot:append>
+             <v-btn icon="mdi-plus" density="compact" variant="text" size="small" @click="sliceNum < p.max && (sliceNum++, onChangeSlider())"></v-btn>
+          </template>
+        </v-text-field>
+      </div>
       <div class="arrows">
         <div class="left-views guide-left-views">
           <span @click="onSwitchSliceOrientation('x')">
-            <i class="switch_font">Sagittal</i>
+            <i class="switch_font">{{ isCompact ? 'S' : 'Sagittal' }}</i>
           </span>
           <span @click="onSwitchSliceOrientation('z')">
-            <i class="switch_font">Axial</i>
+            <i class="switch_font">{{ isCompact ? 'A' : 'Axial' }}</i>
           </span>
           <span @click="onSwitchSliceOrientation('y')">
-            <i class="switch_font">Coronal</i>
+            <i class="switch_font">{{ isCompact ? 'C' : 'Coronal' }}</i>
           </span>
         </div>
         
@@ -29,7 +55,7 @@
             <!-- <ion-icon name="save-outline"></ion-icon> -->
             <ion-icon name="sync-outline"></ion-icon>
           </div>
-          <div>
+          <div v-if="!isCompact">
             <i>sync</i>
           </div>
         </span>
@@ -63,7 +89,7 @@
  *
  * @listens Common:ToggleAppTheme - Updates dark/light mode styling
  */
-import { ref, reactive, toRefs, watchEffect, onMounted, onUnmounted} from "vue";
+import { ref, reactive, toRefs, watchEffect, onMounted, onUnmounted, computed} from "vue";
 import emitter from "@/plugins/custom-emitter";
 
 /**
@@ -78,6 +104,7 @@ type Props = {
   immediateSliceNum?: number;
   contrastIndex?: number;
   isAxisClicked?: boolean;
+  panelWidth?: number;
 };
 
 /** Reference to nav container for theme toggling */
@@ -103,7 +130,13 @@ let p = withDefaults(defineProps<Props>(), {
   fileNum: 0,
   showContrast: false,
   isAxisClicked: false,
+  panelWidth: 1000
 });
+
+const isCompact = computed(() => {
+  return p.panelWidth < 800;
+});
+
 const state = reactive(p);
 const { immediateSliceNum, contrastIndex, initSliceIndex, fileNum } =
   toRefs(state);
@@ -211,7 +244,7 @@ onUnmounted(() => {
   left: 10px; */
 
   height: 60px;
-  width: 85%;
+  width: 55%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -233,6 +266,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow-x: auto; /* Allow scrolling if content is too wide */
+}
+
+/* Scrollbar styling for webkit */
+.nav .content::-webkit-scrollbar {
+  height: 4px;
+}
+.nav .content::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
 }
 
 .dark .content {
@@ -282,6 +325,20 @@ onUnmounted(() => {
     inset -5px -5px 10px rgba(255, 255, 255, 0.1);
 }
 
+/* Compact Mode Styles */
+.compact .content {
+  padding: 0 5px;
+}
+.compact .arrows span {
+  padding: 5px;
+  margin: 2px;
+  min-width: 20px;
+  font-size: 1em;
+}
+.compact .switch_font {
+  font-size: 0.8em;
+}
+
 .image {
   width: 1em;
   height: 1em;
@@ -310,5 +367,14 @@ onUnmounted(() => {
 .left-views{
   display: flex;
   flex-direction: row;
+}
+:deep(.centered-input input) {
+  text-align: center;
+}
+/* Hide spin buttons for number input */
+:deep(input::-webkit-outer-spin-button),
+:deep(input::-webkit-inner-spin-button) {
+  -webkit-appearance: none;
+  margin: 0;
 }
 </style>
