@@ -301,12 +301,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.dark .el-slider {
-  max-width: 35vw;
-  margin-right: 10px;
-  --el-slider-main-bg-color: #f4511e !important;
-  --el-slider-runway-bg-color: rgba(0, 0, 0) !important;
-}
+
 
 .nav {
   /* position: fixed;
