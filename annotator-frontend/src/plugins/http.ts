@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
-import { IRequests } from "@/models/apiTypes";
+import { IRequests } from "@/models";
 
 /**
  * TODO: 
@@ -65,7 +65,7 @@ const http: IHttp = {
           }
         })
         .catch((err) => {
-          if(err.response.status === 404){
+          if (err.response.status === 404) {
             resolve(err.response.status)
           }
           reject(err);

@@ -1,5 +1,5 @@
 import { useSegmentationCasesStore } from "@/store/app";
-import { IToolConfig } from "@/models/apiTypes";
+import { IToolConfig } from "@/models";
 
 export function useCases() {
     const { getAllCasesDetails } = useSegmentationCasesStore();

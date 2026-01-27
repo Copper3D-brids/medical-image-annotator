@@ -1,7 +1,7 @@
 import * as Copper from "copper3d";
 import * as THREE from "three";
 import { getClosestNipple } from "@/plugins/view-utils/tools";
-import { IRequests, IDetails } from "@/models/apiTypes";
+import { IRequests, IDetails } from "@/models";
 export class PanelOperationManager {
   operator: HTMLElement;
   private operatorId: string;
@@ -17,9 +17,9 @@ export class PanelOperationManager {
     y: 0,
     h: 0,
     sensitivity: 1,
-    handleOnDragMouseUp: (ev: MouseEvent) => {},
-    handleOnDragMouseMove: (ev: MouseEvent) => {},
-    handleOnDragMouseDown: (ev: MouseEvent) => {},
+    handleOnDragMouseUp: (ev: MouseEvent) => { },
+    handleOnDragMouseMove: (ev: MouseEvent) => { },
+    handleOnDragMouseDown: (ev: MouseEvent) => { },
   };
 
   constructor(operator: HTMLElement) {
@@ -101,12 +101,12 @@ export class PanelOperationManager {
         if (this.dragPrams.y - ev.offsetY / this.dragPrams.h >= 0) {
           this.dragPrams.move = -Math.ceil(
             ((this.dragPrams.y - ev.offsetY / this.dragPrams.h) * 10) /
-              this.dragPrams.sensitivity
+            this.dragPrams.sensitivity
           );
         } else {
           this.dragPrams.move = -Math.floor(
             ((this.dragPrams.y - ev.offsetY / this.dragPrams.h) * 10) /
-              this.dragPrams.sensitivity
+            this.dragPrams.sensitivity
           );
         }
         this.dragPrams.y = ev.offsetY / this.dragPrams.h;
@@ -214,13 +214,13 @@ export function deepClone(obj: any, clonedObjects = new WeakMap()) {
 }
 
 
-export function processPointsCloud(points:number[][], bias: THREE.Vector3){
-  const processedPoints:number[][] = []
-  points.forEach((point)=>{
-    processedPoints.push([point[0]+bias.x, point[1]+bias.y, point[2]+bias.z])
+export function processPointsCloud(points: number[][], bias: THREE.Vector3) {
+  const processedPoints: number[][] = []
+  points.forEach((point) => {
+    processedPoints.push([point[0] + bias.x, point[1] + bias.y, point[2] + bias.z])
   })
-  
-   return processedPoints;
+
+  return processedPoints;
 
 }
 
@@ -231,7 +231,7 @@ export const findBreastRequestUrls = (
 ) => {
   const currentCaseDetails = details.filter((item) => item.name === caseId)[0];
   const requests: Array<IRequests> = [];
-  
+
   currentCaseDetails.file_paths.segmentation_breast_points_paths.forEach(
     (filepath) => {
       requests.push({

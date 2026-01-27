@@ -18,9 +18,9 @@ import {
     ILoadedMeshes,
     IToolConfig,
     IToolAfterLoadImagesResponse,
-} from "@/models/apiTypes";
+} from "@/models";
 import { revokeAppUrls } from "@/plugins/view-utils/tools";
-import { switchAnimationStatus } from "@/components/viewer/leftCoreUtils";
+import { switchAnimationStatus } from "@/components/viewer/utils";
 import { useSegmentationCasesStore } from "@/store/app";
 import { storeToRefs } from "pinia";
 import emitter from "@/plugins/custom-emitter";

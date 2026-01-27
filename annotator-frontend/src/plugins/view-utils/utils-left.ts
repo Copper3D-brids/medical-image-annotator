@@ -1,5 +1,5 @@
-import { IRequests, IDetails } from "@/models/apiTypes";
-import {  ITumourStudyAppDetail } from "@/models/apiTypes";
+import { IRequests, IDetails } from "@/models";
+import { ITumourStudyAppDetail } from "@/models";
 
 export const findRequestUrls = (
   details: Array<IDetails>,
@@ -40,17 +40,17 @@ export const findRequestUrls = (
 };
 
 
-export function customRound(num:number) {
+export function customRound(num: number) {
   const decimalPart = num - Math.floor(num);
-  
+
   if (decimalPart > 0.5) {
-    return Math.ceil(num);  
+    return Math.ceil(num);
   } else {
-    return Math.floor(num); 
+    return Math.floor(num);
   }
 }
 
-export function distance3D(x1:number, y1:number, z1:number, x2:number, y2:number, z2:number) {
+export function distance3D(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number) {
   let dx = x2 - x1;
   let dy = y2 - y1;
   let dz = z2 - z1;
@@ -59,18 +59,18 @@ export function distance3D(x1:number, y1:number, z1:number, x2:number, y2:number
 
 export const getReportIncompleteCases = (
   details: Array<ITumourStudyAppDetail>
-):ITumourStudyAppDetail[] => {
+): ITumourStudyAppDetail[] => {
   return details.filter((item) => item.report.complete === false);
 };
 
 export const getTumourCenterInCompleteCases = (
   details: Array<ITumourStudyAppDetail>
-):ITumourStudyAppDetail[] => {
+): ITumourStudyAppDetail[] => {
   return details.filter((item) => item.tumour_window.validate === false);
 };
 
 export const getTumourAssitedInCompleteCases = (
   details: Array<ITumourStudyAppDetail>
-):ITumourStudyAppDetail[] => {
+): ITumourStudyAppDetail[] => {
   return details.filter((item) => item.report.assisted === false && item.report.complete === true);
 };

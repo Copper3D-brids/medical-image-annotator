@@ -10,10 +10,10 @@
  */
 import { ref, type Ref } from "vue";
 import { useSingleFile } from "@/plugins/api";
-import { switchAnimationStatus } from "@/components/viewer/leftCoreUtils";
+import { switchAnimationStatus } from "@/components/viewer/utils";
 import * as Copper from "copper3d";
 import * as THREE from "three";
-import { IDetails } from "@/models/apiTypes";
+import { IDetails } from "@/models";
 
 const base_url = import.meta.env.VITE_PLUGIN_API_URL;
 const port = import.meta.env.VITE_PLUGIN_API_PORT;

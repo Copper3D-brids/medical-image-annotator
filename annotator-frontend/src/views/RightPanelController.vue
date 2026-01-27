@@ -56,8 +56,8 @@ import {
   ICommXYZ,
   ILeftRightData,
   ISaveSphere,
-} from "@/models/apiTypes";
-import { switchAnimationStatus } from "@/components/viewer/leftCoreUtils";
+} from "@/models";
+import { switchAnimationStatus } from "@/components/viewer/utils";
 import { PanelOperationManager } from "@/plugins/view-utils/utils-right";
 
 // Import composables

@@ -1,4 +1,4 @@
-import { IToolConfig } from "@/models/apiTypes";
+import { IToolConfig } from "@/models";
 
 export function useAppConfig() {
     const configStr = localStorage.getItem("app_config");

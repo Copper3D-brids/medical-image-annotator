@@ -4,7 +4,7 @@ import {
     useTumourPositionStudyDetails,
     useStudyDisplayNrrd
 } from "@/plugins/tumour_position_study_api";
-import { ITumourStudyAppDetails, ITumourStudyReport } from "@/models/apiTypes";
+import { ITumourStudyAppDetails, ITumourStudyReport } from "@/models";
 
 export const useTumourStudyDetailsStore = defineStore("TumourStudyDetails", () => {
     const studyDetails = ref<ITumourStudyAppDetails>();
@@ -26,4 +26,4 @@ export const useTumourStudyNrrdStore = defineStore("getTumourStudyNrrd", () => {
         studyNrrd,
         getStudyNrrd,
     };
-  });
+});

@@ -1,4 +1,4 @@
-import { ILoadUrls, ICaseUrls } from "@/models/apiTypes";
+import { ILoadUrls, ICaseUrls } from "@/models";
 import * as THREE from "three";
 import eraser_1 from "@/assets/eraser/circular-cursor_3.png";
 import eraser_2 from "@/assets/eraser/circular-cursor_8.png";
@@ -38,12 +38,12 @@ export function revokeAppUrls(revokeUrls: ILoadUrls) {
 }
 
 export function revokeCaseUrls(caseUrls: ICaseUrls) {
-  if (!!caseUrls){
-    if(!!caseUrls.nrrdUrls) caseUrls.nrrdUrls.forEach((url) => {
-        URL.revokeObjectURL(url);
+  if (!!caseUrls) {
+    if (!!caseUrls.nrrdUrls) caseUrls.nrrdUrls.forEach((url) => {
+      URL.revokeObjectURL(url);
     });
-    if(!!caseUrls.jsonUrl) URL.revokeObjectURL(caseUrls.jsonUrl)
-  } 
+    if (!!caseUrls.jsonUrl) URL.revokeObjectURL(caseUrls.jsonUrl)
+  }
 }
 
 export function getEraserUrlsForOffLine() {
@@ -106,7 +106,7 @@ export function createOriginSphere(
     origin[1] + y_bias,
     origin[2] + z_bias,
   ];
-  
+
   spherelt.position.set(resetOrigin[0], resetOrigin[1], resetOrigin[2]);
   spherert.position.set(
     resetOrigin[0] + ras[0],
@@ -206,11 +206,11 @@ export function throttle(callback: (event: MouseEvent) => void, wait: number) {
 
 
 
-export function throttle2(func:Function, delay:number) {
+export function throttle2(func: Function, delay: number) {
   let lastExecTime = 0;
-  let timeoutId:any;
+  let timeoutId: any;
 
-  return function (...args:any[]) {
+  return function (...args: any[]) {
     const currentTime = Date.now();
 
     if (currentTime - lastExecTime >= delay) {

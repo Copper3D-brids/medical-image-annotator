@@ -14,7 +14,7 @@ import {
   IToolConfig,
   IToolConfigResponse,
   IAuth
-} from "@/models/apiTypes";
+} from "@/models";
 import JSZip from "jszip";
 /**
  *

@@ -66,8 +66,8 @@ import {
   getEraserUrlsForOffLine,
   getCursorUrlsForOffLine,
 } from "@/plugins/view-utils/tools";
-import { switchAnimationStatus, addNameToLoadedMeshes } from "./leftCoreUtils";
-import { ILoadedMeshes, } from "@/models/apiTypes";
+import { switchAnimationStatus, addNameToLoadedMeshes } from "./utils";
+import { ILoadedMeshes, } from "@/models";
 
 /** Reference to base container element */
 let baseContainer = ref<HTMLDivElement>();

@@ -18,7 +18,7 @@ import {useToolConfig} from "@/plugins/api";
 import { useSegmentationCasesStore } from "@/store/app";
 // need to remove this after testing
 import toolConfig from "@/assets/tool_config.json";
-import { IToolConfig } from "@/models/apiTypes";
+import { IToolConfig } from "@/models";
 import { useAppConfig } from "@/plugins/hooks/config";
 import { useCases } from "@/plugins/hooks/cases";
 

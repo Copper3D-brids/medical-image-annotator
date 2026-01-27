@@ -16,10 +16,10 @@ import {
     IReplaceMask,
     IToolMaskData,
     IDetails,
-} from "@/models/apiTypes";
+} from "@/models";
 import { useSingleFile, useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks } from "@/plugins/api";
 import { convertInitMaskData } from "@/plugins/worker";
-import { switchAnimationStatus } from "@/components/viewer/leftCoreUtils";
+import { switchAnimationStatus } from "@/components/viewer/utils";
 import emitter from "@/plugins/custom-emitter";
 
 /**

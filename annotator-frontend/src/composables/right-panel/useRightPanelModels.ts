@@ -13,7 +13,7 @@
 import { ref, type Ref } from "vue";
 import * as THREE from "three";
 import * as Copper from "copper3d";
-import { ICommXYZ, ISaveSphere } from "@/models/apiTypes";
+import { ICommXYZ, ISaveSphere } from "@/models";
 
 /**
  * Interface for model management dependencies

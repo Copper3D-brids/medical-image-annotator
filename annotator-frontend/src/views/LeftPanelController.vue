@@ -82,9 +82,9 @@ import {
   IToolAfterLoadImagesResponse,
   IToolGetMouseDragContrastMove,
   IToolConfig
-} from "@/models/apiTypes";
+} from "@/models";
 import emitter from "@/plugins/custom-emitter";
-import { switchAnimationStatus } from "@/components/viewer/leftCoreUtils";
+import { switchAnimationStatus } from "@/components/viewer/utils";
 
 // Import composables
 import {

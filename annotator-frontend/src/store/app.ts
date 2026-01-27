@@ -23,7 +23,7 @@ import {
   ITumourWindow,
   IRequests,
   IAuth
-} from "@/models/apiTypes";
+} from "@/models";
 export const useSegmentationCasesStore = defineStore("allSegmentationCasesDetails", () => {
   const allCasesDetails = ref<INrrdCaseNames>();
   const getAllCasesDetails = async (auth: IAuth) => {

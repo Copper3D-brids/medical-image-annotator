@@ -15,7 +15,7 @@ import {
     ISaveSphere,
     IToolSphereData,
     IToolCalculateSpherePositionsData,
-} from "@/models/apiTypes";
+} from "@/models";
 import { customRound, distance3D } from "@/plugins/view-utils/utils-left";
 import { useSaveSphereStore } from "@/store/app";
 import emitter from "@/plugins/custom-emitter";

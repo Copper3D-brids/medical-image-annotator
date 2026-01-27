@@ -92,7 +92,7 @@ import * as Copper from "copper3d";
 import Switcher from "@/components/common/Switcher.vue";
 import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 import Dialog from "@/components/common/Dialog.vue";
-import { IKeyboardSettings } from "@/models/apiTypes";
+import { IKeyboardSettings } from "@/models";
 
 
 /**
