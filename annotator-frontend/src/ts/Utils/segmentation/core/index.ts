@@ -3,6 +3,8 @@
  *
  * Phase 0 - Data Persistence Strategy
  * Phase 2 - Core Data Layer
+ * Phase 3 - Tool Abstraction
+ * Phase 4 - Rendering Pipeline
  */
 
 // ===== Phase 0: Data Persistence =====
@@ -39,3 +41,31 @@ export type {
     ActionEnabledState,
     KeyboardActionCallback,
 } from './KeyboardManager';
+
+// ===== Phase 3: Tool Abstraction =====
+export {
+    BaseTool,
+    PencilTool,
+    BrushTool,
+    EraserTool,
+    PanTool,
+    ZoomTool,
+    SphereTool,
+    SPHERE_COLORS,
+    ContrastTool,
+} from '../tools';
+export type {
+    ToolContext,
+    ToolName,
+    PanAdapter,
+    ZoomAdapter,
+    SphereType,
+    SphereOrigin,
+    SphereDecayMode,
+    SphereAdapter,
+    ContrastAdapter,
+} from '../tools';
+
+// ===== Phase 4: Rendering Pipeline =====
+export { MaskRenderer, buildLayerImageData } from '../rendering/MaskRenderer';
+export type { RenderConfig, RenderStats, RenderCallback } from '../rendering/MaskRenderer';
