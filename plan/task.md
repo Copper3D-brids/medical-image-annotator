@@ -137,7 +137,7 @@
 
 ### 4.1 Canvas Setup
 - [x] 精简为 3 个 Canvas: displayCanvas, drawingLayer, maskDisplayCanvas
-- [ ] 移除旧的 8 个 Canvas (Phase 6 Integration)
+- [ ] 移除旧的 8 个 Canvas (Phase 7 Integration)
 
 ### 4.2 MaskRenderer
 - [x] `rendering/MaskRenderer.ts` - 从 Uint8Array 渲染到 Canvas
@@ -157,40 +157,84 @@
 ## Phase 5: Crosshair & Sphere Tools
 
 ### 5.1 CrosshairTool
-- [ ] `tools/CrosshairTool.ts` - 跨视图定位
-- [ ] 按 S 键启用/禁用
-- [ ] 点击记录 3D 坐标
-- [ ] 跳转其他视图时同步 mask 显示
-- [ ] 复用 `convertCursorPoint()` 逻辑
+- [x] `tools/CrosshairTool.ts` - 跨视图定位
+- [x] 按 S 键启用/禁用 (toggle/enable/disable API)
+- [x] 点击记录 3D 坐标 (to3DCoord mapping for all 3 axes)
+- [x] 跳转其他视图时同步 mask 显示 (navigateTo + CrosshairAdapter)
+- [x] 复用 `convertCursorPoint()` 逻辑 (via CrosshairAdapter interface)
 
 ### 5.2 SphereTool
-- [ ] `tools/SphereTool.ts` - 4 个全局位置标记
-- [ ] tumour / skin / nipple / ribcage
-- [ ] 滚轮调整半径
+- [x] `tools/SphereTool.ts` - 4 个全局位置标记 (Phase 3 已完成)
+- [x] tumour / skin / nipple / ribcage (Phase 3 已完成)
+- [x] 滚轮调整半径 (Phase 3 已完成)
 
+- [x] **🧪 Unit Tests: 47 tests passed (crosshair.test.ts)** ✅
 - [ ] **🧪 User Testing: 在 Z 视图点击后切换到 Y 视图验证 Crosshair 同步**
 
 ---
 
-## Phase 6: Integration
+## Phase 6: Tool Coordination (ToolCoordinator)
 
-### 6.1 SegmentationManager
+### 6.1 ToolCoordinator 核心
+- [ ] `tools/ToolCoordinator.ts` - 工具互斥与事件路由
+- [ ] 两级模式系统: GUI Tool Selection (Level 1) + Interaction State (Level 2)
+- [ ] `canUse(interaction)` - 查询当前是否允许某交互
+- [ ] `getAllowed()` - 返回当前所有允许的交互集合
+- [ ] `onStateChange` 回调 - 状态变化时通知 UI 层
+
+### 6.2 互斥规则实现
+- [ ] Drawing Tools 规则 (Pencil/Brush/Eraser):
+  - [ ] Shift 按下时: 只允许 draw, 禁止其他全部 (含 arrowSlice)
+  - [ ] Shift 松开时: 允许 zoom, sliceChange, arrowSlice, pan, crosshair(S), contrast(Ctrl)
+  - [ ] Ctrl 按下时: 只允许 contrast + arrowSlice, 禁止其他
+  - [ ] Crosshair ON 时: 禁止 shift, ctrl, draw, contrast, sphere, sliceChange(left-drag); 允许 arrowSlice
+- [ ] Sphere 规则:
+  - [ ] 禁止 draw, crosshair, contrast (永久)
+  - [ ] 左键按下时: 也禁止 zoom, pan, sliceChange, **arrowSlice**
+  - [ ] 左键未按下时: 允许 zoom, pan, sliceChange, arrowSlice
+- [ ] Calculator 规则: 同 Sphere，但左键按下时仍允许 arrowSlice
+- [ ] **arrowSlice (Arrow ↑/↓)**: 仅 Shift 按下和 Sphere+左键按下时禁止，其他全允许
+
+### 6.3 状态转换
+- [ ] 键盘事件: S(crosshair toggle), Shift(draw), Ctrl(contrast), Ctrl+Z/Y(undo/redo)
+- [ ] GUI 工具切换: 自动重置 Level 2 状态, 调用 deactivate()/activate()
+- [ ] Drawing 工具间切换 (Pencil↔Brush↔Eraser): 不影响 Level 2 状态
+
+### 6.4 事件路由
+- [ ] `dispatchPointerDown()` - 根据当前状态路由到正确工具
+- [ ] `dispatchPointerMove()` - 持续操作路由
+- [ ] `dispatchPointerUp()` - 结束操作路由
+- [ ] `dispatchWheel()` - 滚轮事件路由 (zoom/slice/sphere-radius)
+- [ ] `dispatchArrowKey()` - Arrow ↑/↓ 键切换 slice
+
+### 6.5 导出更新
+- [ ] `tools/index.ts` - 导出 ToolCoordinator, GuiTool, InteractionType
+- [ ] `core/index.ts` - 导出 Phase 6 新增内容
+
+- [ ] **🧪 Unit Tests: coordinator.test.ts (~71 tests)**
+- [ ] **🧪 User Testing: 验证工具互斥规则与现有 DrawToolCore 行为一致**
+
+---
+
+## Phase 7: Integration
+
+### 7.1 SegmentationManager
 - [ ] `SegmentationManager.ts` - 统一管理入口
 - [ ] 实现 `getMaskData()` / `setMasksData()` 兼容现有 API
 - [ ] 整合所有 managers 和 tools
 
-### 6.2 StateManager (GUI 解耦)
+### 7.2 StateManager (GUI 解耦)
 - [ ] `core/StateManager.ts` - Vue 组件状态管理
 - [ ] 替代现有 `guiSettings.guiState` / `guiSetting.onChange()` 模式
 - [ ] 提供类型安全的状态更新 API
 
-### 6.3 Vue Component Updates
+### 7.3 Vue Component Updates
 - [ ] 更新 `OperationCtl.vue` - 使用 StateManager
 - [ ] 更新 `Calculator.vue` - 使用 StateManager
 - [ ] 更新 `OperationAdvance.vue` - 使用 StateManager
 - [ ] 更新 `useMaskOperations.ts` - 使用新 API
 
-### 6.4 Event Bus Migration
+### 7.4 Event Bus Migration
 - [ ] 保留 `Core:NrrdTools` 事件或迁移到 StateManager
 - [ ] 保留 `Segmentation:FinishLoadAllCaseImages` 事件
 - [ ] 验证所有 emitter 事件正常工作
@@ -200,19 +244,19 @@
 
 ---
 
-## Phase 7: Testing (Vitest)
+## Phase 8: Testing (Vitest)
 
-### 7.1 Setup
+### 8.1 Setup
 - [ ] 安装 `vitest @vitest/ui jsdom`
 - [ ] 配置 `vitest.config.ts`
 
-### 7.2 Unit Tests
+### 8.2 Unit Tests
 - [ ] `MaskLayer.test.ts` - Uint8Array 操作测试
 - [ ] `LayerManager.test.ts` - 图层管理测试
 - [ ] `UndoManager.test.ts` - undo/redo 测试
 - [ ] `VisibilityManager.test.ts` - 显示/隐藏测试
 
-### 7.3 Integration Tests
+### 8.3 Integration Tests
 - [ ] `PencilTool.test.ts` - 多边形填充测试
 - [ ] `BrushTool.test.ts` - 笔刷测试
 - [ ] `CrosshairTool.test.ts` - 跨视图定位测试
@@ -221,7 +265,7 @@
 
 ---
 
-## Phase 8: Cleanup & Documentation
+## Phase 9: Cleanup & Documentation
 
 - [ ] 删除旧代码: `CommToolsData.ts`, `DrawToolCore.ts` (拆分后)
 - [ ] 更新 README 或添加开发文档
