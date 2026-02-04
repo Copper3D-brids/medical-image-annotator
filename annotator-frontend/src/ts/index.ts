@@ -23,6 +23,18 @@ import { createTexture2D_NRRD } from "./Utils/texture2d";
 import { configKiwriousHeart } from "./Utils/kiwrious/configKiwrious";
 import kiwrious from "./Utils/kiwrious/configKiwrious";
 import { NrrdTools } from "./Utils/segmentation/NrrdTools";
+// Phase 7: Segmentation Module - Unified exports
+import {
+  SegmentationManager,
+  StateManager,
+  type RenderingAdapter,
+  type DimensionAdapter,
+  type StateChangeCallback as ManagerStateChangeCallback,
+  type SegmentationState,
+  type GUIState,
+  type StateChangeListener,
+  type PartialStateUpdate,
+} from "./Utils/segmentation";
 
 import { Copper3dTrackballControls } from "./Controls/Copper3dTrackballControls";
 
@@ -75,6 +87,9 @@ export {
   MeshNodeTool,
   throttle,
   removeGuiFolderChilden,
+  // Phase 7: Segmentation Module
+  SegmentationManager,
+  StateManager,
 };
 
 export type {
@@ -93,5 +108,13 @@ export type {
   ICommXYZ,
   IGUIStates,
   IGuiParameterSettings,
-  INrrdStates
+  INrrdStates,
+  // Phase 7: Segmentation Module Types
+  RenderingAdapter,
+  DimensionAdapter,
+  ManagerStateChangeCallback,
+  SegmentationState,
+  GUIState,
+  StateChangeListener,
+  PartialStateUpdate,
 };

@@ -85,3 +85,7 @@ export type {
 // ===== Phase 4: Rendering Pipeline =====
 export { MaskRenderer, buildLayerImageData } from '../rendering/MaskRenderer';
 export type { RenderConfig, RenderStats, RenderCallback } from '../rendering/MaskRenderer';
+
+// ===== Phase 7: Integration =====
+export { StateManager } from './StateManager';
+export type { GUIState, StateChangeListener, PartialStateUpdate } from './StateManager';

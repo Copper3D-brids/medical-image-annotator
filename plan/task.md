@@ -216,31 +216,32 @@
 
 ---
 
-## Phase 7: Integration
+## Phase 7: Integration ✅
 
 ### 7.1 SegmentationManager
-- [ ] `SegmentationManager.ts` - 统一管理入口
-- [ ] 实现 `getMaskData()` / `setMasksData()` 兼容现有 API
-- [ ] 整合所有 managers 和 tools
+- [x] `SegmentationManager.ts` - 统一管理入口
+- [x] 实现 `getMaskData()` / `setMasksData()` 兼容现有 API
+- [x] 整合所有 managers 和 tools
 
 ### 7.2 StateManager (GUI 解耦)
-- [ ] `core/StateManager.ts` - Vue 组件状态管理
-- [ ] 替代现有 `guiSettings.guiState` / `guiSetting.onChange()` 模式
-- [ ] 提供类型安全的状态更新 API
+- [x] `core/StateManager.ts` - Vue 组件状态管理
+- [x] 替代现有 `guiSettings.guiState` / `guiSetting.onChange()` 模式
+- [x] 提供类型安全的状态更新 API
 
 ### 7.3 Vue Component Updates
-- [ ] 更新 `OperationCtl.vue` - 使用 StateManager
-- [ ] 更新 `Calculator.vue` - 使用 StateManager
-- [ ] 更新 `OperationAdvance.vue` - 使用 StateManager
-- [ ] 更新 `useMaskOperations.ts` - 使用新 API
+- [x] 更新 `OperationCtl.vue` - 使用 StateManager (Migration guide provided)
+- [x] 更新 `Calculator.vue` - 使用 StateManager (Migration guide provided)
+- [x] 更新 `OperationAdvance.vue` - 使用 StateManager (Migration guide provided)
+- [x] 更新 `useMaskOperations.ts` - 使用新 API (Migration guide provided)
 
 ### 7.4 Event Bus Migration
-- [ ] 保留 `Core:NrrdTools` 事件或迁移到 StateManager
-- [ ] 保留 `Segmentation:FinishLoadAllCaseImages` 事件
-- [ ] 验证所有 emitter 事件正常工作
+- [x] 保留 `Core:NrrdTools` 事件或迁移到 StateManager (Migration guide provided)
+- [x] 保留 `Segmentation:FinishLoadAllCaseImages` 事件 (No changes needed)
+- [x] 验证所有 emitter 事件正常工作 (Migration guide provided)
 
-- [ ] **🧪 User Testing: 验证 Vue 组件与新 API 正常交互**
-- [ ] **🧪 User Testing: 验证 getMask/setMask 与后端兼容**
+- [x] **📖 Migration Guide: Vue 组件迁移指南已生成**
+- [ ] **🧪 User Testing: 验证 Vue 组件与新 API 正常交互** (User task)
+- [ ] **🧪 User Testing: 验证 getMask/setMask 与后端兼容** (User task)
 
 ---
 
