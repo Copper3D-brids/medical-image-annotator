@@ -3,6 +3,7 @@
  *
  * Phase 3 - Tool Abstraction
  * Phase 5 - Crosshair & Sphere Tools
+ * Phase 6 - Tool Coordination
  */
 
 // Base Tool
@@ -32,3 +33,13 @@ export type { SphereType, SphereOrigin, SphereDecayMode, SphereAdapter } from '.
 // Adjustment Tools
 export { ContrastTool } from './ContrastTool';
 export type { ContrastAdapter } from './ContrastTool';
+
+// Tool Coordinator
+export { ToolCoordinator } from './ToolCoordinator';
+export type {
+    GuiTool,
+    InteractionType,
+    StateChangeCallback,
+    ArrowSliceCallback,
+    DragSliceCallback,
+} from './ToolCoordinator';

@@ -6,6 +6,7 @@
  * Phase 3 - Tool Abstraction
  * Phase 4 - Rendering Pipeline
  * Phase 5 - Crosshair & Sphere Tools
+ * Phase 6 - Tool Coordination
  */
 
 // ===== Phase 0: Data Persistence =====
@@ -70,6 +71,16 @@ export type {
 // ===== Phase 5: Crosshair & Sphere Tools =====
 export { CrosshairTool } from '../tools';
 export type { CrosshairAdapter } from '../tools';
+
+// ===== Phase 6: Tool Coordination =====
+export { ToolCoordinator } from '../tools';
+export type {
+    GuiTool,
+    InteractionType,
+    StateChangeCallback,
+    ArrowSliceCallback,
+    DragSliceCallback,
+} from '../tools';
 
 // ===== Phase 4: Rendering Pipeline =====
 export { MaskRenderer, buildLayerImageData } from '../rendering/MaskRenderer';

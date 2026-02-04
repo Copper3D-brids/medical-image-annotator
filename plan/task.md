@@ -176,42 +176,42 @@
 ## Phase 6: Tool Coordination (ToolCoordinator)
 
 ### 6.1 ToolCoordinator 核心
-- [ ] `tools/ToolCoordinator.ts` - 工具互斥与事件路由
-- [ ] 两级模式系统: GUI Tool Selection (Level 1) + Interaction State (Level 2)
-- [ ] `canUse(interaction)` - 查询当前是否允许某交互
-- [ ] `getAllowed()` - 返回当前所有允许的交互集合
-- [ ] `onStateChange` 回调 - 状态变化时通知 UI 层
+- [x] `tools/ToolCoordinator.ts` - 工具互斥与事件路由
+- [x] 两级模式系统: GUI Tool Selection (Level 1) + Interaction State (Level 2)
+- [x] `canUse(interaction)` - 查询当前是否允许某交互
+- [x] `getAllowed()` - 返回当前所有允许的交互集合
+- [x] `onStateChange` 回调 - 状态变化时通知 UI 层
 
 ### 6.2 互斥规则实现
-- [ ] Drawing Tools 规则 (Pencil/Brush/Eraser):
-  - [ ] Shift 按下时: 只允许 draw, 禁止其他全部 (含 arrowSlice)
-  - [ ] Shift 松开时: 允许 zoom, sliceChange, arrowSlice, pan, crosshair(S), contrast(Ctrl)
-  - [ ] Ctrl 按下时: 只允许 contrast + arrowSlice, 禁止其他
-  - [ ] Crosshair ON 时: 禁止 shift, ctrl, draw, contrast, sphere, sliceChange(left-drag); 允许 arrowSlice
-- [ ] Sphere 规则:
-  - [ ] 禁止 draw, crosshair, contrast (永久)
-  - [ ] 左键按下时: 也禁止 zoom, pan, sliceChange, **arrowSlice**
-  - [ ] 左键未按下时: 允许 zoom, pan, sliceChange, arrowSlice
-- [ ] Calculator 规则: 同 Sphere，但左键按下时仍允许 arrowSlice
-- [ ] **arrowSlice (Arrow ↑/↓)**: 仅 Shift 按下和 Sphere+左键按下时禁止，其他全允许
+- [x] Drawing Tools 规则 (Pencil/Brush/Eraser):
+  - [x] Shift 按下时: 只允许 draw, 禁止其他全部 (含 arrowSlice)
+  - [x] Shift 松开时: 允许 zoom, sliceChange, arrowSlice, pan, crosshair(S), contrast(Ctrl)
+  - [x] Ctrl 按下时: 只允许 contrast + arrowSlice, 禁止其他
+  - [x] Crosshair ON 时: 禁止 shift, ctrl, draw, contrast, sphere, sliceChange(left-drag); 允许 arrowSlice
+- [x] Sphere 规则:
+  - [x] 禁止 draw, crosshair, contrast (永久)
+  - [x] 左键按下时: 也禁止 zoom, pan, sliceChange, **arrowSlice**
+  - [x] 左键未按下时: 允许 zoom, pan, sliceChange, arrowSlice
+- [x] Calculator 规则: 同 Sphere，但左键按下时仍允许 arrowSlice
+- [x] **arrowSlice (Arrow ↑/↓)**: 仅 Shift 按下和 Sphere+左键按下时禁止，其他全允许
 
 ### 6.3 状态转换
-- [ ] 键盘事件: S(crosshair toggle), Shift(draw), Ctrl(contrast), Ctrl+Z/Y(undo/redo)
-- [ ] GUI 工具切换: 自动重置 Level 2 状态, 调用 deactivate()/activate()
-- [ ] Drawing 工具间切换 (Pencil↔Brush↔Eraser): 不影响 Level 2 状态
+- [x] 键盘事件: S(crosshair toggle), Shift(draw), Ctrl(contrast), Ctrl+Z/Y(undo/redo)
+- [x] GUI 工具切换: 自动重置 Level 2 状态, 调用 deactivate()/activate()
+- [x] Drawing 工具间切换 (Pencil↔Brush↔Eraser): 不影响 Level 2 状态
 
 ### 6.4 事件路由
-- [ ] `dispatchPointerDown()` - 根据当前状态路由到正确工具
-- [ ] `dispatchPointerMove()` - 持续操作路由
-- [ ] `dispatchPointerUp()` - 结束操作路由
-- [ ] `dispatchWheel()` - 滚轮事件路由 (zoom/slice/sphere-radius)
-- [ ] `dispatchArrowKey()` - Arrow ↑/↓ 键切换 slice
+- [x] `dispatchPointerDown()` - 根据当前状态路由到正确工具
+- [x] `dispatchPointerMove()` - 持续操作路由
+- [x] `dispatchPointerUp()` - 结束操作路由
+- [x] `dispatchWheel()` - 滚轮事件路由 (zoom/slice/sphere-radius)
+- [x] `dispatchArrowKey()` - Arrow ↑/↓ 键切换 slice
 
 ### 6.5 导出更新
-- [ ] `tools/index.ts` - 导出 ToolCoordinator, GuiTool, InteractionType
-- [ ] `core/index.ts` - 导出 Phase 6 新增内容
+- [x] `tools/index.ts` - 导出 ToolCoordinator, GuiTool, InteractionType
+- [x] `core/index.ts` - 导出 Phase 6 新增内容
 
-- [ ] **🧪 Unit Tests: coordinator.test.ts (~71 tests)**
+- [x] **🧪 Unit Tests: coordinator.test.ts (84 tests)** ✅
 - [ ] **🧪 User Testing: 验证工具互斥规则与现有 DrawToolCore 行为一致**
 
 ---

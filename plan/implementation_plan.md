@@ -1212,10 +1212,10 @@ export class UndoManager {
 
 ---
 
-## Phase 6: Tool Coordination (ToolCoordinator)
+## Phase 6: Tool Coordination (ToolCoordinator) ✅
 
-> [!IMPORTANT]
-> **核心问题**: 现有 DrawToolCore.ts 使用分散的布尔标志（`Is_Shift_Pressed`, `Is_Ctrl_Pressed`, `enableCursorChoose`, `gui_states.sphere` 等）分布在 3 个不同对象中管理工具互斥，没有统一状态机。新架构需要一个集中的 ToolCoordinator 来管理工具互斥规则、输入事件路由、工具生命周期。
+> [!NOTE]
+> Phase 6 已完成。84 个 ToolCoordinator 单元测试全部通过。
 
 ### Design: 两级模式系统
 
@@ -1576,7 +1576,7 @@ segmentation/
 │   ├── ContrastTool.ts       [NEW] ✅ Phase 3
 │   ├── SphereTool.ts         [NEW] ✅ Phase 3
 │   ├── CrosshairTool.ts      [NEW] ✅ Phase 5
-│   ├── ToolCoordinator.ts    [NEW] Phase 6
+│   ├── ToolCoordinator.ts    [NEW] ✅ Phase 6
 │   └── index.ts              [NEW] ✅ Phase 3 (updated Phase 5, Phase 6)
 ├── rendering/
 │   └── MaskRenderer.ts       [NEW] ✅ Phase 4
@@ -1586,7 +1586,7 @@ segmentation/
 │   ├── tools.test.ts         [NEW] ✅ Phase 3 (67 tests)
 │   ├── rendering.test.ts     [NEW] ✅ Phase 4 (45 tests)
 │   ├── crosshair.test.ts     [NEW] ✅ Phase 5 (47 tests)
-│   └── coordinator.test.ts   [NEW] Phase 6 (~71 tests)
+│   └── coordinator.test.ts   [NEW] ✅ Phase 6 (84 tests)
 └── shaders/                  [NEW] ✅ Phase 2
     ├── mask2d.vert
     ├── mask2d.frag
