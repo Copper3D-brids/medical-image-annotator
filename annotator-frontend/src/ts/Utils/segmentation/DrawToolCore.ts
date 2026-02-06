@@ -11,6 +11,7 @@ import {
 } from "./coreTools/coreType";
 import { CommToolsData } from "./CommToolsData";
 import { switchEraserSize, switchPencilIcon, throttle } from "../utils";
+import { EventRouter, InteractionMode } from "./eventRouter";
 
 export class DrawToolCore extends CommToolsData {
   container: HTMLElement;
@@ -43,6 +44,9 @@ export class DrawToolCore extends CommToolsData {
   pencilUrls: string[] = [];
   undoArray: Array<IUndoType> = [];
 
+  // Centralized event router
+  protected eventRouter: EventRouter | null = null;
+
   // need to return to parent
   start: () => void = () => { };
 
@@ -56,56 +60,93 @@ export class DrawToolCore extends CommToolsData {
   }
 
   private initDrawToolCore() {
-    let undoFlag = false;
-    this.container.addEventListener("keydown", (ev: KeyboardEvent) => {
+    // Initialize EventRouter for centralized event handling
+    this.eventRouter = new EventRouter({
+      container: this.container,
+      canvas: this.protectedData.canvases.drawingCanvas,
+      onModeChange: (prevMode, newMode) => {
+        // Use string comparison to avoid TypeScript narrowing issues
+        const prev = prevMode as string;
+        const next = newMode as string;
 
+        // Sync EventRouter mode changes with existing state flags
+        if (next === 'draw') {
+          this.protectedData.Is_Shift_Pressed = true;
+          this.nrrd_states.enableCursorChoose = false;
+        } else if (prev === 'draw') {
+          this.protectedData.Is_Shift_Pressed = false;
+        }
+        if (next === 'contrast') {
+          this.protectedData.Is_Ctrl_Pressed = true;
+          this.protectedData.Is_Shift_Pressed = false;
+          this.configContrastDragMode();
+        } else if (prev === 'contrast') {
+          this.protectedData.Is_Ctrl_Pressed = false;
+          this.removeContrastDragMode();
+          this.gui_states.readyToUpdate = true;
+        }
+        if (next === 'crosshair') {
+          this.nrrd_states.enableCursorChoose = true;
+          this.protectedData.Is_Draw = false;
+        } else if (prev === 'crosshair') {
+          this.nrrd_states.enableCursorChoose = false;
+        }
+      }
+    });
+
+    // Configure keyboard settings from nrrd_states
+    this.eventRouter.setKeyboardSettings(this.nrrd_states.keyboardSettings);
+
+    // Track undo flag for Ctrl+Z handling
+    let undoFlag = false;
+
+    // Register keyboard handlers with EventRouter
+    this.eventRouter.setKeydownHandler((ev: KeyboardEvent) => {
       if (this.nrrd_states.configKeyBoard) return;
 
-      if (ev.key === this.nrrd_states.keyboardSettings.draw && !this.gui_states.sphere && !this.gui_states.calculator) {
-        if (this.protectedData.Is_Ctrl_Pressed) {
-          this.protectedData.Is_Shift_Pressed = false;
-          return;
-        }
-        this.protectedData.Is_Shift_Pressed = true;
-        this.nrrd_states.enableCursorChoose = false;
-      }
-
-      if (ev.key === this.nrrd_states.keyboardSettings.crosshair) {
-        this.protectedData.Is_Draw = false;
-        this.nrrd_states.enableCursorChoose =
-          !this.nrrd_states.enableCursorChoose;
-      }
+      // Handle undo (Ctrl+Z)
       if ((ev.ctrlKey || ev.metaKey) && ev.key === this.nrrd_states.keyboardSettings.undo) {
         undoFlag = true;
         this.undoLastPainting();
       }
-    });
-    this.container.addEventListener("keyup", (ev: KeyboardEvent) => {
 
+      // Handle crosshair toggle
+      if (ev.key === this.nrrd_states.keyboardSettings.crosshair) {
+        if (!this.gui_states.sphere && !this.gui_states.calculator) {
+          this.eventRouter?.toggleCrosshair();
+        }
+      }
+
+      // Handle draw mode (Shift key) - EventRouter already tracks this
+      if (ev.key === this.nrrd_states.keyboardSettings.draw && !this.gui_states.sphere && !this.gui_states.calculator) {
+        if (this.protectedData.Is_Ctrl_Pressed) {
+          return; // Ctrl takes priority
+        }
+        // EventRouter will set mode to 'draw' via internal handler
+      }
+    });
+
+    this.eventRouter.setKeyupHandler((ev: KeyboardEvent) => {
       if (this.nrrd_states.configKeyBoard) return;
 
+      // Handle Ctrl key release (contrast mode toggle)
       if (this.nrrd_states.keyboardSettings.contrast.includes(ev.key)) {
         if (undoFlag) {
           this.gui_states.readyToUpdate = true;
           undoFlag = false;
           return;
         }
-        // Ctrl key pressed on either Windows or macOS
-        this.protectedData.Is_Shift_Pressed = false;
-        this.protectedData.Is_Ctrl_Pressed = !this.protectedData.Is_Ctrl_Pressed;
-
-        if (this.protectedData.Is_Ctrl_Pressed) {
-          this.configContrastDragMode();
+        // Toggle contrast mode manually since it's on keyup
+        if (this.eventRouter?.getMode() !== 'contrast') {
+          this.eventRouter?.setMode('contrast');
         } else {
-          this.removeContrastDragMode();
-          this.gui_states.readyToUpdate = true;
+          this.eventRouter?.setMode('idle');
         }
       }
-
-      if (ev.key === this.nrrd_states.keyboardSettings.draw) {
-        this.protectedData.Is_Shift_Pressed = false;
-      }
     });
+
+    // Bind all event listeners
+    this.eventRouter.bindAll();
   }
 
   setEraserUrls(urls: string[]) {

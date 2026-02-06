@@ -10,6 +10,7 @@ import {
   IPaintImages,
 } from "./coreTools/coreType";
 import { createShowSliceNumberDiv } from "./coreTools/divControlTools";
+import type { EventRouter } from "./eventRouter";
 
 interface IDragEffectCanvases {
   drawingCanvasLayerMaster: HTMLCanvasElement;
@@ -28,9 +29,9 @@ export class DragOperator {
     y: 0,
     h: 0,
     sensivity: 1,
-    handleOnDragMouseUp: (ev: MouseEvent) => {},
-    handleOnDragMouseDown: (ev: MouseEvent) => {},
-    handleOnDragMouseMove: (ev: MouseEvent) => {},
+    handleOnDragMouseUp: (ev: MouseEvent) => { },
+    handleOnDragMouseDown: (ev: MouseEvent) => { },
+    handleOnDragMouseMove: (ev: MouseEvent) => { },
   };
   private drawingPrameters: IDrawingEvents;
   private sensitiveArray: number[] = [];
@@ -49,6 +50,9 @@ export class DragOperator {
     sliceIndex: number,
     paintedImages: IPaintImages
   ) => IPaintImage;
+
+  // EventRouter for centralized event handling
+  private eventRouter: EventRouter | null = null;
 
   constructor(
     container: HTMLElement,
@@ -101,6 +105,33 @@ export class DragOperator {
     this.showDragNumberDiv = sliceIndexContainer;
   }
 
+  /**
+   * Set the EventRouter reference for centralized event handling.
+   * Called by NrrdTools/DrawToolCore after EventRouter is initialized.
+   * Subscribes to mode changes to control drag mode.
+   */
+  setEventRouter(eventRouter: EventRouter): void {
+    this.eventRouter = eventRouter;
+
+    // Subscribe to mode changes to control drag/contrast modes
+    this.eventRouter.subscribeModeChange((prevMode, newMode) => {
+      const prev = prevMode as string;
+      const next = newMode as string;
+
+      // When entering draw or contrast mode, remove drag mode
+      if (next === 'draw' || next === 'contrast') {
+        this.removeDragMode();
+      }
+
+      // When leaving draw or contrast mode (returning to idle), restore drag mode
+      if ((prev === 'draw' || prev === 'contrast') && next === 'idle') {
+        if (!this.gui_states.sphere) {
+          this.configDragMode();
+        }
+      }
+    });
+  }
+
   drag(opts?: IDragOpts) {
     this.dragPrameters.h = this.container.offsetHeight;
 
@@ -131,12 +162,12 @@ export class DragOperator {
       if (this.dragPrameters.y - ev.offsetY / this.dragPrameters.h >= 0) {
         this.dragPrameters.move = -Math.ceil(
           ((this.dragPrameters.y - ev.offsetY / this.dragPrameters.h) * 10) /
-            this.dragPrameters.sensivity
+          this.dragPrameters.sensivity
         );
       } else {
         this.dragPrameters.move = -Math.floor(
           ((this.dragPrameters.y - ev.offsetY / this.dragPrameters.h) * 10) /
-            this.dragPrameters.sensivity
+          this.dragPrameters.sensivity
         );
       }
 
@@ -165,35 +196,35 @@ export class DragOperator {
 
     this.configDragMode();
 
-    this.container.addEventListener("keydown", (ev: KeyboardEvent) => {
-      
-      if (this.nrrd_states.configKeyBoard) return;
+    // If EventRouter is available, mode changes are handled via onModeChange callback in DrawToolCore.
+    // Otherwise, fall back to direct keyboard listeners for backwards compatibility.
+    if (!this.eventRouter) {
+      // Legacy mode: direct keyboard event listeners
+      this.container.addEventListener("keydown", (ev: KeyboardEvent) => {
+        if (this.nrrd_states.configKeyBoard) return;
 
-      if (ev.key === this.nrrd_states.keyboardSettings.draw) {
-        this.removeDragMode();
-      }
-    });
-    this.container.addEventListener("keyup", (ev: KeyboardEvent) => {
-
-      if (this.nrrd_states.configKeyBoard) return;
-
-      if ( this.nrrd_states.keyboardSettings.contrast.includes(ev.key)) {
-        /**
-         * if ctrl pressed remove the drag mode
-         */
-        if(this.protectedData.Is_Ctrl_Pressed){
+        if (ev.key === this.nrrd_states.keyboardSettings.draw) {
           this.removeDragMode();
-        }else{
+        }
+      });
+      this.container.addEventListener("keyup", (ev: KeyboardEvent) => {
+        if (this.nrrd_states.configKeyBoard) return;
+
+        if (this.nrrd_states.keyboardSettings.contrast.includes(ev.key)) {
+          if (this.protectedData.Is_Ctrl_Pressed) {
+            this.removeDragMode();
+          } else {
+            this.configDragMode();
+          }
+        }
+        if (ev.key === this.nrrd_states.keyboardSettings.draw && !this.gui_states.sphere) {
+          if (this.protectedData.Is_Ctrl_Pressed) {
+            return
+          }
           this.configDragMode();
         }
-      }
-      if (ev.key === this.nrrd_states.keyboardSettings.draw && !this.gui_states.sphere) {
-        if(this.protectedData.Is_Ctrl_Pressed){
-          return
-        }
-        this.configDragMode();
-      }
-    });
+      });
+    }
   }
 
   updateIndex(move: number) {
@@ -375,11 +406,9 @@ export class DragOperator {
       if (this.nrrd_states.showContrast) {
         (
           this.showDragNumberDiv as HTMLDivElement
-        ).innerHTML = `ContrastNum: ${contrastNum}/${
-          this.protectedData.displaySlices.length - 1
-        } SliceNum: ${this.nrrd_states.currentIndex}/${
-          this.nrrd_states.maxIndex
-        }`;
+        ).innerHTML = `ContrastNum: ${contrastNum}/${this.protectedData.displaySlices.length - 1
+        } SliceNum: ${this.nrrd_states.currentIndex}/${this.nrrd_states.maxIndex
+          }`;
       } else {
         (
           this.showDragNumberDiv as HTMLDivElement

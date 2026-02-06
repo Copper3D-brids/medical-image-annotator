@@ -58,6 +58,11 @@ export class NrrdTools extends DrawToolCore {
       this.setEmptyCanvasSize,
       this.filterDrawedImage
     );
+
+    // Inject EventRouter into DragOperator for centralized event handling
+    if (this.eventRouter) {
+      this.dragOperator.setEventRouter(this.eventRouter);
+    }
   }
 
   /**
