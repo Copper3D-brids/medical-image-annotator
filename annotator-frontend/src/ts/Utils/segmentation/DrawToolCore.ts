@@ -12,6 +12,13 @@ import {
 import { CommToolsData } from "./CommToolsData";
 import { switchEraserSize, switchPencilIcon, throttle } from "../utils";
 import { EventRouter, InteractionMode } from "./eventRouter";
+import { SphereTool } from "./tools/SphereTool";
+import { CrosshairTool } from "./tools/CrosshairTool";
+import { ContrastTool } from "./tools/ContrastTool";
+import { ZoomTool } from "./tools/ZoomTool";
+import { EraserTool } from "./tools/EraserTool";
+import { ImageStoreHelper } from "./tools/ImageStoreHelper";
+import type { ToolContext } from "./tools/BaseTool";
 
 export class DrawToolCore extends CommToolsData {
   container: HTMLElement;
@@ -47,6 +54,14 @@ export class DrawToolCore extends CommToolsData {
   // Centralized event router
   protected eventRouter: EventRouter | null = null;
 
+  // Extracted tools
+  protected sphereTool!: SphereTool;
+  protected crosshairTool!: CrosshairTool;
+  protected contrastTool!: ContrastTool;
+  protected zoomTool!: ZoomTool;
+  protected eraserTool!: EraserTool;
+  protected imageStoreHelper!: ImageStoreHelper;
+
   // need to return to parent
   start: () => void = () => { };
 
@@ -56,7 +71,56 @@ export class DrawToolCore extends CommToolsData {
     this.container = container;
     this.mainAreaContainer = mainAreaContainer;
 
+    this.initTools();
     this.initDrawToolCore();
+  }
+
+  private initTools() {
+    const toolCtx: ToolContext = {
+      nrrd_states: this.nrrd_states,
+      gui_states: this.gui_states,
+      protectedData: this.protectedData,
+      cursorPage: this.cursorPage,
+    };
+
+    this.imageStoreHelper = new ImageStoreHelper(toolCtx, {
+      setEmptyCanvasSize: (axis?) => this.setEmptyCanvasSize(axis),
+      drawImageOnEmptyImage: (canvas) => this.drawImageOnEmptyImage(canvas),
+    });
+
+    this.sphereTool = new SphereTool(toolCtx, {
+      setEmptyCanvasSize: (axis?) => this.setEmptyCanvasSize(axis),
+      drawImageOnEmptyImage: (canvas) => this.drawImageOnEmptyImage(canvas),
+      storeImageToAxis: (index, paintedImages, imageData, axis?) =>
+        this.imageStoreHelper.storeImageToAxis(index, paintedImages, imageData, axis),
+      createEmptyPaintImage: (dimensions, paintImages) =>
+        this.createEmptyPaintImage(dimensions, paintImages),
+    });
+
+    this.crosshairTool = new CrosshairTool(toolCtx);
+
+    this.contrastTool = new ContrastTool(
+      toolCtx,
+      this.container,
+      this.contrastEventPrameters,
+      {
+        setIsDrawFalse: (target) => this.setIsDrawFalse(target),
+        setSyncsliceNum: () => this.setSyncsliceNum(),
+      }
+    );
+
+    this.zoomTool = new ZoomTool(
+      toolCtx,
+      this.container,
+      this.mainAreaContainer,
+      {
+        resetPaintAreaUIPosition: (l?, t?) => this.resetPaintAreaUIPosition(l, t),
+        resizePaintArea: (moveDistance) => this.resizePaintArea(moveDistance),
+        setIsDrawFalse: (target) => this.setIsDrawFalse(target),
+      }
+    );
+
+    this.eraserTool = new EraserTool(toolCtx);
   }
 
   private initDrawToolCore() {
@@ -165,16 +229,16 @@ export class DrawToolCore extends CommToolsData {
   private setCurrentLayer() {
     let ctx: CanvasRenderingContext2D;
     let canvas: HTMLCanvasElement;
-    switch (this.gui_states.label) {
-      case "label1":
+    switch (this.gui_states.layer) {
+      case "layer1":
         ctx = this.protectedData.ctxes.drawingLayerOneCtx;
         canvas = this.protectedData.canvases.drawingCanvasLayerOne;
         break;
-      case "label2":
+      case "layer2":
         ctx = this.protectedData.ctxes.drawingLayerTwoCtx;
         canvas = this.protectedData.canvases.drawingCanvasLayerTwo;
         break;
-      case "label3":
+      case "layer3":
         ctx = this.protectedData.ctxes.drawingLayerThreeCtx;
         canvas = this.protectedData.canvases.drawingCanvasLayerThree;
         break;
@@ -270,13 +334,7 @@ export class DrawToolCore extends CommToolsData {
   }
 
   private clearSpherePrintStoreImages() {
-    this.protectedData.maskData.paintImages.x.length = 0;
-    this.protectedData.maskData.paintImages.y.length = 0;
-    this.protectedData.maskData.paintImages.z.length = 0;
-    this.createEmptyPaintImage(
-      this.nrrd_states.dimensions,
-      this.protectedData.maskData.paintImages
-    );
+    this.sphereTool.clearSpherePrintStoreImages();
   }
 
   private paintOnCanvas() {
@@ -540,20 +598,20 @@ export class DrawToolCore extends CommToolsData {
       );
     }
 
-    const redrawPreviousImageToLabelCtx = (
+    const redrawPreviousImageToLayerCtx = (
       ctx: CanvasRenderingContext2D,
-      label: string = "default"
+      layer: string = "default"
     ) => {
       let paintImages: IPaintImages;
-      switch (label) {
-        case "label1":
-          paintImages = this.protectedData.maskData.paintImagesLabel1;
+      switch (layer) {
+        case "layer1":
+          paintImages = this.protectedData.maskData.paintImagesLayer1;
           break;
-        case "label2":
-          paintImages = this.protectedData.maskData.paintImagesLabel2;
+        case "layer2":
+          paintImages = this.protectedData.maskData.paintImagesLayer2;
           break;
-        case "label3":
-          paintImages = this.protectedData.maskData.paintImagesLabel3;
+        case "layer3":
+          paintImages = this.protectedData.maskData.paintImagesLayer3;
           break;
         default:
           paintImages = this.protectedData.maskData.paintImages;
@@ -567,7 +625,7 @@ export class DrawToolCore extends CommToolsData {
       this.protectedData.canvases.emptyCanvas.width =
         this.protectedData.canvases.emptyCanvas.width;
 
-      if (tempPreImg && label == "default") {
+      if (tempPreImg && layer == "default") {
         this.protectedData.previousDrawingImage = tempPreImg;
       }
       this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg, 0, 0);
@@ -599,10 +657,10 @@ export class DrawToolCore extends CommToolsData {
               this.protectedData.canvases.drawingCanvasLayerMaster.width =
                 this.protectedData.canvases.drawingCanvasLayerMaster.width;
               canvas.width = canvas.width;
-              redrawPreviousImageToLabelCtx(
+              redrawPreviousImageToLayerCtx(
                 this.protectedData.ctxes.drawingLayerMasterCtx
               );
-              redrawPreviousImageToLabelCtx(ctx, this.gui_states.label);
+              redrawPreviousImageToLayerCtx(ctx, this.gui_states.layer);
               // draw new drawings
               ctx.beginPath();
               ctx.moveTo(lines[0].x, lines[0].y);
@@ -633,17 +691,17 @@ export class DrawToolCore extends CommToolsData {
             );
           this.storeAllImages(
             this.nrrd_states.currentIndex,
-            this.gui_states.label
+            this.gui_states.layer
           );
           if (this.gui_states.Eraser) {
-            const restLabels = this.getRestLabel();
+            const restLayers = this.getRestLayer();
             this.storeEachLayerImage(
               this.nrrd_states.currentIndex,
-              restLabels[0]
+              restLayers[0]
             );
             this.storeEachLayerImage(
               this.nrrd_states.currentIndex,
-              restLabels[1]
+              restLayers[1]
             );
           }
 
@@ -659,15 +717,15 @@ export class DrawToolCore extends CommToolsData {
           image.src = src;
           if (currentUndoObj.length > 0) {
             currentUndoObj[0].layers[
-              this.gui_states.label as "label1" | "label2" | "label3"
+              this.gui_states.layer as "layer1" | "layer2" | "layer3"
             ].push(image);
           } else {
             const undoObj: IUndoType = {
               sliceIndex: this.nrrd_states.currentIndex,
-              layers: { label1: [], label2: [], label3: [] },
+              layers: { layer1: [], layer2: [], layer3: [] },
             };
             undoObj.layers[
-              this.gui_states.label as "label1" | "label2" | "label3"
+              this.gui_states.layer as "layer1" | "layer2" | "layer3"
             ].push(image);
             this.undoArray.push(undoObj);
           }
@@ -979,102 +1037,13 @@ export class DrawToolCore extends CommToolsData {
   }
 
   private useEraser() {
-    const clearArc = (x: number, y: number, radius: number) => {
-      var calcWidth = radius - this.nrrd_states.stepClear;
-      var calcHeight = Math.sqrt(radius * radius - calcWidth * calcWidth);
-      var posX = x - calcWidth;
-      var posY = y - calcHeight;
-      var widthX = 2 * calcWidth;
-      var heightY = 2 * calcHeight;
-
-      if (this.nrrd_states.stepClear <= radius) {
-        this.protectedData.ctxes.drawingLayerMasterCtx.clearRect(
-          posX,
-          posY,
-          widthX,
-          heightY
-        );
-        this.protectedData.ctxes.drawingLayerOneCtx.clearRect(
-          posX,
-          posY,
-          widthX,
-          heightY
-        );
-        this.protectedData.ctxes.drawingLayerTwoCtx.clearRect(
-          posX,
-          posY,
-          widthX,
-          heightY
-        );
-        this.protectedData.ctxes.drawingLayerThreeCtx.clearRect(
-          posX,
-          posY,
-          widthX,
-          heightY
-        );
-        this.nrrd_states.stepClear += 1;
-        clearArc(x, y, radius);
-      }
-    };
-    return clearArc;
+    console.log("use eraser");
+    
+    return this.eraserTool.createClearArc();
   }
   // drawing canvas mouse zoom wheel
   configMouseZoomWheel() {
-
-    let moveDistance = 1;
-    const handleMouseZoomSliceWheelMove = (e: WheelEvent) => {
-      if (this.protectedData.Is_Shift_Pressed) {
-        return;
-      }
-      e.preventDefault();
-      // this.nrrd_states.originWidth;
-      const delta = e.detail ? e.detail > 0 : (e as any).wheelDelta < 0;
-      this.protectedData.Is_Draw = true;
-
-      var rect = this.container.getBoundingClientRect();
-
-      const ratioL =
-        (e.clientX - rect.left -
-          this.mainAreaContainer.offsetLeft -
-          this.protectedData.canvases.drawingCanvas.offsetLeft) /
-        this.protectedData.canvases.drawingCanvas.offsetWidth;
-
-      const ratioT =
-        (e.clientY - rect.top -
-          this.mainAreaContainer.offsetTop -
-          this.protectedData.canvases.drawingCanvas.offsetTop) /
-        this.protectedData.canvases.drawingCanvas.offsetHeight;
-      const ratioDelta = !delta ? 1 + 0.1 : 1 - 0.1;
-
-      const w =
-        this.protectedData.canvases.drawingCanvas.offsetWidth * ratioDelta;
-      const h =
-        this.protectedData.canvases.drawingCanvas.offsetHeight * ratioDelta;
-      const l = Math.round(
-        e.clientX - this.mainAreaContainer.offsetLeft - w * ratioL - rect.left
-      );
-      const t = Math.round(
-        e.clientY - this.mainAreaContainer.offsetTop - h * ratioT - rect.top
-      );
-
-      moveDistance = w / this.nrrd_states.originWidth;
-
-      if (moveDistance > 8) {
-        moveDistance = 8;
-        // this.resetPaintAreaUIPosition();
-      } else if (moveDistance < 1) {
-        moveDistance = 1;
-        this.resetPaintAreaUIPosition();
-        this.resizePaintArea(moveDistance);
-      } else {
-        this.resetPaintAreaUIPosition(l, t);
-        this.resizePaintArea(moveDistance);
-      }
-
-      this.setIsDrawFalse(1000);
-      this.nrrd_states.sizeFoctor = moveDistance;
-    };
-    return handleMouseZoomSliceWheelMove;
+    return this.zoomTool.configMouseZoomWheel();
   }
 
   configMouseSliceWheel() {
@@ -1088,24 +1057,7 @@ export class DrawToolCore extends CommToolsData {
   }
 
   private enableCrosshair() {
-    this.nrrd_states.isCursorSelect = true;
-    switch (this.protectedData.axis) {
-      case "x":
-        this.cursorPage.x.updated = true;
-        this.cursorPage.y.updated = false;
-        this.cursorPage.z.updated = false;
-        break;
-      case "y":
-        this.cursorPage.x.updated = false;
-        this.cursorPage.y.updated = true;
-        this.cursorPage.z.updated = false;
-        break;
-      case "z":
-        this.cursorPage.x.updated = false;
-        this.cursorPage.y.updated = false;
-        this.cursorPage.z.updated = true;
-        break;
-    }
+    this.crosshairTool.enableCrosshair();
   }
 
   drawImageOnEmptyImage(canvas: HTMLCanvasElement) {
@@ -1118,266 +1070,32 @@ export class DrawToolCore extends CommToolsData {
     );
   }
 
-  /****************************Sphere calculate distance functions****************************************************/
-
-  private getSpherePosition(position: ICommXYZ, axis: "x" | "y" | "z") {
-    const mouseX = position[axis][0];
-    const mouseY = position[axis][1];
-    const sliceIndex = position[axis][2];
-    return { x: mouseX, y: mouseY, z: sliceIndex }
-  }
+  /****************************Sphere functions (delegated to SphereTool)****************************************************/
 
   drawCalculatorSphereOnEachViews(axis: "x" | "y" | "z") {
-    // init sphere canvas width and height
-    this.setSphereCanvasSize(axis);
-    // get drawingSphere canvas for storing 
-    const ctx = this.protectedData.ctxes.drawingSphereCtx;
-    const canvas = this.protectedData.canvases.drawingSphereCanvas;
-
-    let tumourPosition = !!this.nrrd_states.tumourSphereOrigin ? Object.assign(this.getSpherePosition(this.nrrd_states.tumourSphereOrigin as ICommXYZ, axis), { color: this.nrrd_states.tumourColor }) : null;
-    let skinPosition = !!this.nrrd_states.skinSphereOrigin ? Object.assign(this.getSpherePosition(this.nrrd_states.skinSphereOrigin as ICommXYZ, axis), { color: this.nrrd_states.skinColor }) : null;
-    let ribcagePosition = !!this.nrrd_states.ribSphereOrigin ? Object.assign(this.getSpherePosition(this.nrrd_states.ribSphereOrigin as ICommXYZ, axis), { color: this.nrrd_states.ribcageColor }) : null;
-    let nipplePosition = !!this.nrrd_states.nippleSphereOrigin ? Object.assign(this.getSpherePosition(this.nrrd_states.nippleSphereOrigin as ICommXYZ, axis), { color: this.nrrd_states.nippleColor }) : null;
-
-    let positionGroup = [];
-    if (!!tumourPosition) positionGroup.push(tumourPosition);
-    if (!!skinPosition) positionGroup.push(skinPosition);
-    if (!!ribcagePosition) positionGroup.push(ribcagePosition);
-    if (!!nipplePosition) positionGroup.push(nipplePosition);
-
-    let copyPosition = JSON.parse(JSON.stringify(positionGroup));
-
-    let rePositionGroup: ICommXYZ[][] = [];
-    // group same slice points
-    positionGroup.forEach((p) => {
-      let temp = [];
-      let sameIndex = [];
-
-      for (let i = 0; i < copyPosition.length; i++) {
-        if (p.z == copyPosition[i].z) {
-          temp.push(copyPosition[i])
-          sameIndex.push(i)
-        }
-      }
-      sameIndex.reverse();
-      sameIndex.forEach(i => copyPosition.splice(i, 1));
-      if (temp.length > 0) rePositionGroup.push(temp as []);
-      if (copyPosition.length == 0) {
-        return
-      }
-    })
-
-    rePositionGroup.forEach((group) => {
-      group.forEach(p => {
-        this.drawSphereCore(ctx, (p as any).x, (p as any).y, this.nrrd_states.sphereRadius, (p as any).color);
-      });
-      this.storeSphereImages((group[0] as any).z, axis);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    })
-  }
-
-  /****************************Sphere functions****************************************************/
-  // for sphere
-
-  private storeSphereImages(index: number, axis: "x" | "y" | "z") {
-    this.setEmptyCanvasSize(axis);
-    this.drawImageOnEmptyImage(this.protectedData.canvases.drawingSphereCanvas);
-    let imageData = this.protectedData.ctxes.emptyCtx.getImageData(
-      0,
-      0,
-      this.protectedData.canvases.emptyCanvas.width,
-      this.protectedData.canvases.emptyCanvas.height
-    );
-    this.storeImageToAxis(
-      index,
-      this.protectedData.maskData.paintImages,
-      imageData,
-      axis
-    );
+    this.sphereTool.drawCalculatorSphereOnEachViews(axis);
   }
 
   private drawSphereOnEachViews(decay: number, axis: "x" | "y" | "z") {
-    // init sphere canvas width and height
-    this.setSphereCanvasSize(axis);
-
-    const mouseX = this.nrrd_states.sphereOrigin[axis][0];
-    const mouseY = this.nrrd_states.sphereOrigin[axis][1];
-
-    const originIndex = this.nrrd_states.sphereOrigin[axis][2];
-    const preIndex = originIndex - decay;
-    const nextIndex = originIndex + decay;
-    const ctx = this.protectedData.ctxes.drawingSphereCtx;
-    const canvas = this.protectedData.canvases.drawingSphereCanvas;
-
-    if (preIndex === nextIndex) {
-      this.drawSphereCore(ctx, mouseX, mouseY, this.nrrd_states.sphereRadius, this.gui_states.fillColor);
-      this.storeSphereImages(preIndex, axis);
-    } else {
-      this.drawSphereCore(
-        ctx,
-        mouseX,
-        mouseY,
-        (this.nrrd_states.sphereRadius - decay), this.gui_states.fillColor
-      );
-      this.drawImageOnEmptyImage(canvas);
-      this.storeSphereImages(preIndex, axis);
-      this.storeSphereImages(nextIndex, axis);
-    }
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    this.sphereTool.drawSphereOnEachViews(decay, axis);
   }
 
-  /**
-   * 
-   * @param ctx draw sphere canvas ctx
-   * @param x width must be match the origin size, size factor 1, ignore the size factor
-   * @param y height must be match the origin size, size factor 1, ignore the size factor
-   * @param radius radius must be match the origin size, size factor 1, ignore the size factor
-   * @param color sphere color
-   */
-  private drawSphereCore(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    radius: number,
-    color: string
-  ) {
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.closePath();
-  }
-
-  private setSphereCanvasSize(axis?: "x" | "y" | "z") {
-    switch (!!axis ? axis : this.protectedData.axis) {
-      case "x":
-        this.protectedData.canvases.drawingSphereCanvas.width =
-          this.nrrd_states.nrrd_z_mm;
-        this.protectedData.canvases.drawingSphereCanvas.height =
-          this.nrrd_states.nrrd_y_mm;
-        break;
-      case "y":
-        this.protectedData.canvases.drawingSphereCanvas.width =
-          this.nrrd_states.nrrd_x_mm;
-        this.protectedData.canvases.drawingSphereCanvas.height =
-          this.nrrd_states.nrrd_z_mm;
-        break;
-      case "z":
-        this.protectedData.canvases.drawingSphereCanvas.width =
-          this.nrrd_states.nrrd_x_mm;
-        this.protectedData.canvases.drawingSphereCanvas.height =
-          this.nrrd_states.nrrd_y_mm;
-        break;
-    }
-  }
-  // drawing canvas mouse shpere wheel
   private configMouseSphereWheel() {
-    const sphereEvent = (e: WheelEvent) => {
-      e.preventDefault();
-
-      if (e.deltaY < 0) {
-        this.nrrd_states.sphereRadius += 1;
-      } else {
-        this.nrrd_states.sphereRadius -= 1;
-      }
-      // limited the radius max and min
-      this.nrrd_states.sphereRadius = Math.max(
-        1,
-        Math.min(this.nrrd_states.sphereRadius, 50)
-      );
-      // get mouse position
-      const mouseX = this.nrrd_states.sphereOrigin[this.protectedData.axis][0];
-      const mouseY = this.nrrd_states.sphereOrigin[this.protectedData.axis][1];
-      this.drawSphere(mouseX, mouseY, this.nrrd_states.sphereRadius);
-    };
-    return sphereEvent;
+    return this.sphereTool.configMouseSphereWheel();
   }
 
   drawCalculatorSphere(radius: number) {
-
-    // clear canvas
-    const [canvas, ctx] = this.clearSphereCanvas()
-
-    if (!!this.nrrd_states.tumourSphereOrigin && this.nrrd_states.tumourSphereOrigin[this.protectedData.axis][2] === this.nrrd_states.currentIndex) {
-      this.drawSphereCore(ctx as CanvasRenderingContext2D, this.nrrd_states.tumourSphereOrigin[this.protectedData.axis][0], this.nrrd_states.tumourSphereOrigin[this.protectedData.axis][1], radius, this.nrrd_states.tumourColor);
-    }
-
-    if (!!this.nrrd_states.skinSphereOrigin && this.nrrd_states.skinSphereOrigin[this.protectedData.axis][2] === this.nrrd_states.currentIndex) {
-      this.drawSphereCore(ctx as CanvasRenderingContext2D, this.nrrd_states.skinSphereOrigin[this.protectedData.axis][0], this.nrrd_states.skinSphereOrigin[this.protectedData.axis][1], radius, this.nrrd_states.skinColor);
-    }
-
-    if (!!this.nrrd_states.ribSphereOrigin && this.nrrd_states.ribSphereOrigin[this.protectedData.axis][2] === this.nrrd_states.currentIndex) {
-      this.drawSphereCore(ctx as CanvasRenderingContext2D, this.nrrd_states.ribSphereOrigin[this.protectedData.axis][0], this.nrrd_states.ribSphereOrigin[this.protectedData.axis][1], radius, this.nrrd_states.ribcageColor);
-    }
-
-    if (!!this.nrrd_states.nippleSphereOrigin && this.nrrd_states.nippleSphereOrigin[this.protectedData.axis][2] === this.nrrd_states.currentIndex) {
-      this.drawSphereCore(ctx as CanvasRenderingContext2D, this.nrrd_states.nippleSphereOrigin[this.protectedData.axis][0], this.nrrd_states.nippleSphereOrigin[this.protectedData.axis][1], radius, this.nrrd_states.nippleColor);
-    }
-
-    this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
-      canvas as HTMLCanvasElement,
-      0,
-      0,
-      this.nrrd_states.changedWidth,
-      this.nrrd_states.changedHeight
-    );
+    this.sphereTool.drawCalculatorSphere(radius);
   }
-
 
   drawSphere(mouseX: number, mouseY: number, radius: number) {
-    console.log(radius);
-
-    // clear canvas
-    const [canvas, ctx] = this.clearSphereCanvas()
-    this.drawSphereCore(ctx as CanvasRenderingContext2D, mouseX, mouseY, radius, this.gui_states.fillColor);
-
-    console.log("when drawing shpere on canvas");
-
-    console.log("Line 1256 mastercanvasesize:", this.protectedData.canvases.drawingCanvasLayerMaster.width, this.protectedData.canvases.drawingCanvasLayerMaster.height);
-    console.log("current xy:", mouseX, mouseY);
-    console.log("current changed width:", this.nrrd_states.changedWidth, this.nrrd_states.changedHeight);
-
-
-    this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
-      canvas as HTMLCanvasElement,
-      0,
-      0,
-      this.nrrd_states.changedWidth,
-      this.nrrd_states.changedHeight
-    );
-  }
-
-  private clearSphereCanvas() {
-    // this.protectedData.canvases.drawingSphereCanvas.width =
-    //   this.protectedData.canvases.drawingCanvasLayerMaster.width;
-    // this.protectedData.canvases.drawingSphereCanvas.height =
-    //   this.protectedData.canvases.drawingCanvasLayerMaster.height;
-
-    // clear drawingCanvasLayerMaster
-    this.protectedData.canvases.drawingCanvasLayerMaster.width = this.protectedData.canvases.drawingCanvasLayerMaster.width;
-    // resize sphere canvas size to original size
-    this.protectedData.canvases.drawingSphereCanvas.width = this.protectedData.canvases.originCanvas.width;
-    this.protectedData.canvases.drawingSphereCanvas.height = this.protectedData.canvases.originCanvas.height;
-    const canvas = this.protectedData.canvases.drawingSphereCanvas;
-    const ctx = this.protectedData.ctxes.drawingSphereCtx;
-    return [canvas, ctx]
+    this.sphereTool.drawSphere(mouseX, mouseY, radius);
   }
 
   /**
-  * We generate the MRI slice from threejs based on mm, but when we display it is based on pixel size/distance.
-  * So, the index munber on each axis (sagittal, axial, coronal) is the slice's depth in mm distance. And the width and height displayed on screen is the slice's width and height in pixel distance.
-  *
-  * When we switch into different axis' views, we need to convert current view's the depth to the pixel distance in other views width or height, and convert the current view's width or height from pixel distance to mm distance as other views' depth (slice index) in general.
-  *
-  * Then as for the crosshair (Cursor Inspector), we also need to convert the cursor point (x, y, z) to other views' (x, y, z).
-  *
-  * @param from "x" | "y" | "z", current view axis, "x: sagittle, y: coronal, z: axial".
-  * @param to "x" | "y" | "z", target view axis (where you want jump to), "x: sagittle, y: coronal, z: axial".
-  * @param cursorNumX number, cursor point x on current axis's slice. (pixel distance)
-  * @param cursorNumY number, cursor point y on current axis's slice. (pixel distance)
-  * @param currentSliceIndex number, current axis's slice's index/depth. (mm distance)
-  * @returns
-  */
+   * Convert cursor point between axis views.
+   * Delegated to CrosshairTool.
+   */
   convertCursorPoint(
     from: "x" | "y" | "z",
     to: "x" | "y" | "z",
@@ -1385,143 +1103,21 @@ export class DrawToolCore extends CommToolsData {
     cursorNumY: number,
     currentSliceIndex: number
   ) {
-
-    const nrrd = this.nrrd_states;
-    const dimensions = nrrd.dimensions;
-    const ratios = nrrd.ratios;
-    const { nrrd_x_mm, nrrd_y_mm, nrrd_z_mm } = nrrd;
-
-    let currentIndex = 0;
-    let oldIndex = 0;
-    let convertCursorNumX = 0;
-    let convertCursorNumY = 0;
-
-    const convertIndex = {
-      x: {
-        y: (val: number) => Math.ceil((val / nrrd_x_mm) * dimensions[0]),
-        z: (val: number) => Math.ceil((val / nrrd_z_mm) * dimensions[2]),
-      },
-      y: {
-        x: (val: number) => Math.ceil((val / nrrd_y_mm) * dimensions[1]),
-        z: (val: number) => Math.ceil((1 - val / nrrd_z_mm) * dimensions[2]),
-      },
-      z: {
-        x: (val: number) => Math.ceil((val / nrrd_x_mm) * dimensions[0]),
-        y: (val: number) => Math.ceil((val / nrrd_y_mm) * dimensions[1]),
-      },
-    };
-
-
-    const convertCursor = {
-      x: {
-        y: (sliceIndex: number) =>
-          Math.ceil((sliceIndex / dimensions[0]) * nrrd_x_mm),
-        z: (sliceIndex: number) =>
-          Math.ceil((sliceIndex / dimensions[0]) * nrrd_x_mm),
-      },
-      y: {
-        x: (sliceIndex: number) =>
-          Math.ceil((sliceIndex / dimensions[1]) * nrrd_y_mm),
-        z: (sliceIndex: number) =>
-          Math.ceil((sliceIndex / dimensions[1]) * nrrd_y_mm),
-      },
-      z: {
-        x: (sliceIndex: number) =>
-          Math.ceil((sliceIndex / dimensions[2]) * nrrd_z_mm),
-        y: (sliceIndex: number) =>
-          Math.ceil((1 - sliceIndex / dimensions[2]) * nrrd_z_mm),
-      },
-    };
-
-    if (from === to) {
-      return;
-    }
-    if (from === "z" && to === "x") {
-      currentIndex = convertIndex[from][to](cursorNumX);
-      oldIndex = currentIndex * ratios[to];
-      convertCursorNumX = convertCursor[from][to](currentSliceIndex);
-      convertCursorNumY = cursorNumY;
-    } else if (from === "y" && to === "x") {
-      currentIndex = convertIndex[from][to](cursorNumX);
-      oldIndex = currentIndex * ratios.x;
-      convertCursorNumY = convertCursor[from][to](currentSliceIndex);
-      convertCursorNumX = dimensions[2] * ratios.z - cursorNumY;
-    } else if (from === "z" && to === "y") {
-      currentIndex = convertIndex[from][to](cursorNumY);
-      oldIndex = currentIndex * ratios[to];
-      convertCursorNumY = convertCursor[from][to](currentSliceIndex);
-      convertCursorNumX = cursorNumX;
-    } else if (from === "x" && to === "y") {
-      currentIndex = convertIndex[from][to](cursorNumY);
-      oldIndex = currentIndex * ratios[to];
-      convertCursorNumX = convertCursor[from][to](currentSliceIndex);
-      convertCursorNumY = dimensions[2] * ratios.z - cursorNumX;
-    } else if (from === "x" && to === "z") {
-      currentIndex = convertIndex[from][to](cursorNumX);
-      oldIndex = currentIndex * ratios[to];
-      convertCursorNumX = convertCursor[from][to](currentSliceIndex);
-      convertCursorNumY = cursorNumY;
-    } else if (from === "y" && to === "z") {
-      currentIndex = convertIndex[from][to](cursorNumY);
-      oldIndex = currentIndex * ratios.z;
-      convertCursorNumY = convertCursor[from][to](currentSliceIndex);
-      convertCursorNumX = cursorNumX;
-    } else {
-      return;
-    }
-
-    return { currentIndex, oldIndex, convertCursorNumX, convertCursorNumY };
+    return this.crosshairTool.convertCursorPoint(from, to, cursorNumX, cursorNumY, currentSliceIndex);
   }
 
   private setUpSphereOrigins(mouseX: number, mouseY: number, sliceIndex: number) {
-
-    const convertCursor = (from: "x" | "y" | "z", to: "x" | "y" | "z") => {
-      const convertObj = this.convertCursorPoint(
-        from,
-        to,
-        mouseX,
-        mouseY,
-        sliceIndex
-      ) as IConvertObjType;
-
-      return {
-        convertCursorNumX: convertObj?.convertCursorNumX,
-        convertCursorNumY: convertObj?.convertCursorNumY,
-        currentIndex: convertObj?.currentIndex,
-      };
-    };
-
-    const axisConversions = {
-      x: { axisTo1: "y", axisTo2: "z" },
-      y: { axisTo1: "z", axisTo2: "x" },
-      z: { axisTo1: "x", axisTo2: "y" },
-    };
-
-    const { axisTo1, axisTo2 } = axisConversions[this.protectedData.axis] as {
-      axisTo1: "x" | "y" | "z";
-      axisTo2: "x" | "y" | "z";
-    };
-
-    this.nrrd_states.sphereOrigin[axisTo1] = [
-      convertCursor(this.protectedData.axis, axisTo1).convertCursorNumX,
-      convertCursor(this.protectedData.axis, axisTo1).convertCursorNumY,
-      convertCursor(this.protectedData.axis, axisTo1).currentIndex,
-    ];
-    this.nrrd_states.sphereOrigin[axisTo2] = [
-      convertCursor(this.protectedData.axis, axisTo2).convertCursorNumX,
-      convertCursor(this.protectedData.axis, axisTo2).convertCursorNumY,
-      convertCursor(this.protectedData.axis, axisTo2).currentIndex,
-    ];
+    this.crosshairTool.setUpSphereOrigins(mouseX, mouseY, sliceIndex);
   }
 
-  /****************************label div controls****************************************************/
+  /****************************layer div controls****************************************************/
 
-  getRestLabel() {
-    const labels = this.nrrd_states.labels;
-    const restLabel = labels.filter((item) => {
-      return item !== this.gui_states.label;
+  getRestLayer() {
+    const layers = this.nrrd_states.layers;
+    const restLayer = layers.filter((item) => {
+      return item !== this.gui_states.layer;
     });
-    return restLabel;
+    return restLayer;
   }
 
   /**************************** Undo clear functions****************************************************/
@@ -1546,10 +1142,10 @@ export class DrawToolCore extends CommToolsData {
     this.protectedData.previousDrawingImage =
       this.protectedData.ctxes.emptyCtx.createImageData(1, 1);
 
-    this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.label);
-    const restLabels = this.getRestLabel();
-    this.storeEachLayerImage(this.nrrd_states.currentIndex, restLabels[0]);
-    this.storeEachLayerImage(this.nrrd_states.currentIndex, restLabels[1]);
+    this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.layer);
+    const restLayers = this.getRestLayer();
+    this.storeEachLayerImage(this.nrrd_states.currentIndex, restLayers[0]);
+    this.storeEachLayerImage(this.nrrd_states.currentIndex, restLayers[1]);
     this.setIsDrawFalse(1000);
   }
 
@@ -1567,7 +1163,7 @@ export class DrawToolCore extends CommToolsData {
     if (currentUndoObj.length > 0) {
       const undo = currentUndoObj[0];
       const layerUndos =
-        undo.layers[this.gui_states.label as "label1" | "label2" | "label3"];
+        undo.layers[this.gui_states.layer as "layer1" | "layer2" | "layer3"];
       const layerLen = layerUndos.length;
       // if (layerLen === 0) return;
       layerUndos.pop();
@@ -1586,8 +1182,8 @@ export class DrawToolCore extends CommToolsData {
           );
         }
       }
-      if (undo.layers.label1.length > 0) {
-        const image = undo.layers.label1[undo.layers.label1.length - 1];
+      if (undo.layers.layer1.length > 0) {
+        const image = undo.layers.layer1[undo.layers.layer1.length - 1];
 
         this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
           image,
@@ -1597,8 +1193,8 @@ export class DrawToolCore extends CommToolsData {
           this.nrrd_states.changedHeight
         );
       }
-      if (undo.layers.label2.length > 0) {
-        const image = undo.layers.label2[undo.layers.label2.length - 1];
+      if (undo.layers.layer2.length > 0) {
+        const image = undo.layers.layer2[undo.layers.layer2.length - 1];
         this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
           image,
           0,
@@ -1607,8 +1203,8 @@ export class DrawToolCore extends CommToolsData {
           this.nrrd_states.changedHeight
         );
       }
-      if (undo.layers.label3.length > 0) {
-        const image = undo.layers.label3[undo.layers.label3.length - 1];
+      if (undo.layers.layer3.length > 0) {
+        const image = undo.layers.layer3[undo.layers.layer3.length - 1];
         this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
           image,
           0,
@@ -1624,12 +1220,12 @@ export class DrawToolCore extends CommToolsData {
           this.protectedData.canvases.drawingCanvasLayerMaster.width,
           this.protectedData.canvases.drawingCanvasLayerMaster.height
         );
-      this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.label);
+      this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.layer);
       this.setIsDrawFalse(1000);
     }
   }
 
-  /****************************Store images****************************************************/
+  /****************************Store images (delegated to ImageStoreHelper)****************************************************/
 
   storeImageToAxis(
     index: number,
@@ -1637,314 +1233,47 @@ export class DrawToolCore extends CommToolsData {
     imageData: ImageData,
     axis?: "x" | "y" | "z"
   ) {
-    let temp: IPaintImage = {
-      index,
-      image: imageData,
-    };
-
-    let drawedImage: IPaintImage;
-    switch (!!axis ? axis : this.protectedData.axis) {
-      case "x":
-        drawedImage = this.filterDrawedImage("x", index, paintedImages);
-        drawedImage
-          ? (drawedImage.image = imageData)
-          : paintedImages.x?.push(temp);
-        break;
-      case "y":
-        drawedImage = this.filterDrawedImage("y", index, paintedImages);
-        drawedImage
-          ? (drawedImage.image = imageData)
-          : paintedImages.y?.push(temp);
-        break;
-      case "z":
-        drawedImage = this.filterDrawedImage("z", index, paintedImages);
-        drawedImage
-          ? (drawedImage.image = imageData)
-          : paintedImages.z?.push(temp);
-        break;
-    }
+    this.imageStoreHelper.storeImageToAxis(index, paintedImages, imageData, axis);
   }
 
-  storeAllImages(index: number, label: string) {
-    // const image: HTMLImageElement = new Image();
-
-    // resize the drawing image data
-    if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere && !this.gui_states.calculator) {
-      this.setEmptyCanvasSize();
-      this.drawImageOnEmptyImage(
-        this.protectedData.canvases.drawingCanvasLayerMaster
-      );
-    }
-
-    let imageData = this.protectedData.ctxes.emptyCtx.getImageData(
-      0,
-      0,
-      this.protectedData.canvases.emptyCanvas.width,
-      this.protectedData.canvases.emptyCanvas.height
-    );
-
-    // 1.12.23
-    switch (this.protectedData.axis) {
-      case "x":
-        const maskData_x = this.checkSharedPlaceSlice(
-          this.nrrd_states.nrrd_x_pixel,
-          this.nrrd_states.nrrd_y_pixel,
-          imageData
-        );
-
-        const marked_a_x = this.sliceArrayV(
-          maskData_x,
-          this.nrrd_states.nrrd_y_pixel,
-          this.nrrd_states.nrrd_z_pixel
-        );
-        const marked_b_x = this.sliceArrayH(
-          maskData_x,
-          this.nrrd_states.nrrd_y_pixel,
-          this.nrrd_states.nrrd_z_pixel
-        );
-
-        // const ratio_a_x =
-        //   this.nrrd_states.nrrd_z / this.nrrd_states.dimensions[2];
-        // const ratio_b_x =
-        //   this.nrrd_states.nrrd_y / this.nrrd_states.dimensions[1];
-
-        const convertXIndex = index;
-        // from x the target z will replace the col pixel
-        this.replaceVerticalColPixels(
-          this.protectedData.maskData.paintImages.z,
-          this.nrrd_states.dimensions[2],
-          // this.nrrd_states.ratios.z,
-          1,
-          marked_a_x,
-          this.nrrd_states.nrrd_x_pixel,
-          convertXIndex
-        );
-        // from x the target y will replace the col pixel
-        this.replaceVerticalColPixels(
-          this.protectedData.maskData.paintImages.y,
-          this.nrrd_states.dimensions[1],
-          // this.nrrd_states.ratios.y,
-          1,
-          marked_b_x,
-          this.nrrd_states.nrrd_x_pixel,
-          convertXIndex
-        );
-        break;
-      case "y":
-        const maskData_y = this.checkSharedPlaceSlice(
-          this.nrrd_states.nrrd_x_pixel,
-          this.nrrd_states.nrrd_y_pixel,
-          imageData
-        );
-        const marked_a_y = this.sliceArrayV(
-          maskData_y,
-          this.nrrd_states.nrrd_z_pixel,
-          this.nrrd_states.nrrd_x_pixel
-        );
-        const marked_b_y = this.sliceArrayH(
-          maskData_y,
-          this.nrrd_states.nrrd_z_pixel,
-          this.nrrd_states.nrrd_x_pixel
-        );
-
-        // const ratio_a_y =
-        //   this.nrrd_states.nrrd_x / this.nrrd_states.dimensions[0];
-        // const ratio_b_y =
-        //   this.nrrd_states.nrrd_z / this.nrrd_states.dimensions[2];
-
-        const convertYIndex = index;
-
-        this.replaceHorizontalRowPixels(
-          this.protectedData.maskData.paintImages.x,
-          this.nrrd_states.dimensions[0],
-          // this.nrrd_states.ratios.x,
-          1,
-          marked_a_y,
-          this.nrrd_states.nrrd_z_pixel,
-          convertYIndex
-        );
-
-        this.replaceHorizontalRowPixels(
-          this.protectedData.maskData.paintImages.z,
-          this.nrrd_states.dimensions[2],
-          // this.nrrd_states.ratios.z,
-          1,
-          marked_b_y,
-          this.nrrd_states.nrrd_x_pixel,
-          convertYIndex
-        );
-
-        break;
-      case "z":
-        // for x slices get cols' pixels
-
-        // for y slices get rows' pixels
-        // 1. slice z 的 y轴对应了slice y的index，所以我们可以通过slice z 确定在y轴上那些行是有pixels的，我们就可以将它的y坐标（或者是行号）对应到slice y的index，并将该index下的marked image提取出来。
-        // 2. 接着我们可以通过当前slice z 的index，来确定marked image 需要替换或重组的 行 pixel array。
-
-        const maskData_z = this.checkSharedPlaceSlice(
-          this.nrrd_states.nrrd_x_pixel,
-          this.nrrd_states.nrrd_y_pixel,
-          imageData
-        );
-
-        // 1. get slice z's each row's and col's pixel as a 2d array.
-        // 1.1 get the cols' 2d array for slice x
-        const marked_a_z = this.sliceArrayV(
-          maskData_z,
-          this.nrrd_states.nrrd_y_pixel,
-          this.nrrd_states.nrrd_x_pixel
-        );
-
-        // 1.2 get the rows' 2d array for slice y
-        const marked_b_z = this.sliceArrayH(
-          maskData_z,
-          this.nrrd_states.nrrd_y_pixel,
-          this.nrrd_states.nrrd_x_pixel
-        );
-        // 1.3 get x axis ratio for converting, to match the number slice x with the slice z's x axis pixel number.
-        // const ratio_a_z =
-        //   this.nrrd_states.nrrd_x / this.nrrd_states.dimensions[0];
-
-        // // 1.4 get y axis ratio for converting
-        // const ratio_b_z =
-        //   this.nrrd_states.nrrd_y / this.nrrd_states.dimensions[1];
-        // 1.5 To identify which row/col data should be replace
-        const convertZIndex = index;
-        // 2. Mapping coordinates
-        // from z the target x will replace the col pixel
-        this.replaceVerticalColPixels(
-          this.protectedData.maskData.paintImages.x,
-          this.nrrd_states.dimensions[0],
-          // this.nrrd_states.ratios.x,
-          1,
-          marked_a_z,
-          this.nrrd_states.nrrd_z_pixel,
-          convertZIndex
-        );
-
-        // from z the target y will replace row pixel
-        this.replaceHorizontalRowPixels(
-          this.protectedData.maskData.paintImages.y,
-          this.nrrd_states.dimensions[1],
-          // this.nrrd_states.ratios.y,
-          1,
-          marked_b_z,
-          this.nrrd_states.nrrd_x_pixel,
-          convertZIndex
-        );
-        break;
-    }
-
-    this.storeImageToAxis(
-      index,
-      this.protectedData.maskData.paintImages,
-      imageData
-    );
-    if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere && !this.gui_states.calculator) {
-      this.storeEachLayerImage(index, label);
-    }
+  storeAllImages(index: number, layer: string) {
+    this.imageStoreHelper.storeAllImages(index, layer);
   }
 
-  storeImageToLabel(
+  storeImageToLayer(
     index: number,
     canvas: HTMLCanvasElement,
     paintedImages: IPaintImages
   ) {
-    if (!this.nrrd_states.loadMaskJson) {
-      this.setEmptyCanvasSize();
-      this.drawImageOnEmptyImage(canvas);
-    }
-    const imageData = this.protectedData.ctxes.emptyCtx.getImageData(
-      0,
-      0,
-      this.protectedData.canvases.emptyCanvas.width,
-      this.protectedData.canvases.emptyCanvas.height
-    );
-    this.storeImageToAxis(index, paintedImages, imageData);
-    // this.setEmptyCanvasSize()
-    return imageData;
+    return this.imageStoreHelper.storeImageToLayer(index, canvas, paintedImages);
   }
 
-  storeEachLayerImage(index: number, label: string) {
-    if (!this.nrrd_states.loadMaskJson) {
-      this.setEmptyCanvasSize();
-    }
-    let imageData;
-    switch (label) {
-      case "label1":
-        imageData = this.storeImageToLabel(
-          index,
-          this.protectedData.canvases.drawingCanvasLayerOne,
-          this.protectedData.maskData.paintImagesLabel1
-        );
-        break;
-      case "label2":
-        imageData = this.storeImageToLabel(
-          index,
-          this.protectedData.canvases.drawingCanvasLayerTwo,
-          this.protectedData.maskData.paintImagesLabel2
-        );
-        break;
-      case "label3":
-        imageData = this.storeImageToLabel(
-          index,
-          this.protectedData.canvases.drawingCanvasLayerThree,
-          this.protectedData.maskData.paintImagesLabel3
-        );
-        break;
-    }
-    // callback function to return the painted image
-    if (!this.nrrd_states.loadMaskJson && this.protectedData.axis == "z") {
-      this.nrrd_states.getMask(
-        imageData as ImageData,
-        this.nrrd_states.currentIndex,
-        label,
-        this.nrrd_states.nrrd_x_pixel,
-        this.nrrd_states.nrrd_y_pixel,
-        this.nrrd_states.clearAllFlag
-      );
-    }
+  storeEachLayerImage(index: number, layer: string) {
+    this.imageStoreHelper.storeEachLayerImage(index, layer);
   }
 
-  // slice array to 2d array
+  checkSharedPlaceSlice(width: number, height: number, imageData: ImageData) {
+    return this.imageStoreHelper.checkSharedPlaceSlice(width, height, imageData);
+  }
+
+  replaceArray(
+    mainArr: number[] | Uint8ClampedArray,
+    replaceArr: number[] | Uint8ClampedArray
+  ) {
+    this.imageStoreHelper.replaceArray(mainArr, replaceArr);
+  }
+
+  findSliceInSharedPlace() {
+    return this.imageStoreHelper.findSliceInSharedPlace();
+  }
+
   sliceArrayH(arr: Uint8ClampedArray, row: number, col: number) {
-    const arr2D = [];
-    for (let i = 0; i < row; i++) {
-      const start = i * col * 4;
-      const end = (i + 1) * col * 4;
-      const temp = arr.slice(start, end);
-      arr2D.push(temp);
-    }
-    return arr2D;
+    return this.imageStoreHelper.sliceArrayH(arr, row, col);
   }
 
   sliceArrayV(arr: Uint8ClampedArray, row: number, col: number) {
-    const arr2D = [];
-    const base = col * 4;
-    for (let i = 0; i < col; i++) {
-      const temp = [];
-      for (let j = 0; j < row; j++) {
-        const index = base * j + i * 4;
-        temp.push(arr[index]);
-        temp.push(arr[index + 1]);
-        temp.push(arr[index + 2]);
-        temp.push(arr[index + 3]);
-      }
-      arr2D.push(temp);
-    }
-    return arr2D;
+    return this.imageStoreHelper.sliceArrayV(arr, row, col);
   }
-
-  /**
-   *
-   * @param paintImageArray : the target view slice's marked images array
-   * @param length : the target view slice's dimention (total slice index num)
-   * @param ratio : the target slice image's width/height ratio of its dimention length
-   * @param markedArr : current painted image's vertical 2d Array
-   * @param targetWidth : the target image width
-   * @param convertIndex : Mapping current image's index to target slice image's width/height pixel start point
-   */
 
   replaceVerticalColPixels(
     paintImageArray: IPaintImage[],
@@ -1954,31 +1283,11 @@ export class DrawToolCore extends CommToolsData {
     targetWidth: number,
     convertIndex: number
   ) {
-    for (let i = 0, len = length; i < len; i++) {
-      const index = Math.floor(i * ratio);
-      const convertImageArray = paintImageArray[i].image.data;
-      const mark_data = markedArr[index];
-      const base_a = targetWidth * 4;
-
-      for (let j = 0, len = mark_data.length; j < len; j += 4) {
-        const start = (j / 4) * base_a + convertIndex * 4;
-        convertImageArray[start] = mark_data[j];
-        convertImageArray[start + 1] = mark_data[j + 1];
-        convertImageArray[start + 2] = mark_data[j + 2];
-        convertImageArray[start + 3] = mark_data[j + 3];
-      }
-    }
+    this.imageStoreHelper.replaceVerticalColPixels(
+      paintImageArray, length, ratio, markedArr, targetWidth, convertIndex
+    );
   }
 
-  /**
-   *
-   * @param paintImageArray : the target view slice's marked images array
-   * @param length : the target view slice's dimention (total slice index num)
-   * @param ratio : the target slice image's width/height ratio of its dimention length
-   * @param markedArr : current painted image's horizontal 2d Array
-   * @param targetWidth : the target image width
-   * @param convertIndex : Mapping current image's index to target slice image's width/height pixel start point
-   */
   replaceHorizontalRowPixels(
     paintImageArray: IPaintImage[],
     length: number,
@@ -1987,232 +1296,30 @@ export class DrawToolCore extends CommToolsData {
     targetWidth: number,
     convertIndex: number
   ) {
-    for (let i = 0, len = length; i < len; i++) {
-      const index = Math.floor(i * ratio);
-      const convertImageArray = paintImageArray[i].image.data;
-      const mark_data = markedArr[index] as number[];
-      const start = targetWidth * convertIndex * 4;
-      for (let j = 0, len = mark_data.length; j < len; j++) {
-        convertImageArray[start + j] = mark_data[j];
-      }
-    }
-  }
-
-  /****************************** Utils for store image and itksnap core **************************************/
-
-  checkSharedPlaceSlice(
-    width: number,
-    height: number,
-    imageData: ImageData
-  ) {
-    let maskData = this.protectedData.ctxes.emptyCtx.createImageData(
-      width,
-      height
-    ).data;
-
-    if (
-      this.nrrd_states.sharedPlace.z.includes(this.nrrd_states.currentIndex)
-    ) {
-      const sharedPlaceArr = this.findSliceInSharedPlace();
-      sharedPlaceArr.push(imageData);
-      if (sharedPlaceArr.length > 0) {
-        for (let i = 0; i < sharedPlaceArr.length; i++) {
-          this.replaceArray(maskData, sharedPlaceArr[i].data);
-        }
-      }
-    } else {
-      maskData = imageData.data;
-    }
-    return maskData;
-  }
-
-  // replace Array
-  replaceArray(
-    mainArr: number[] | Uint8ClampedArray,
-    replaceArr: number[] | Uint8ClampedArray
-  ) {
-    for (let i = 0, len = replaceArr.length; i < len; i++) {
-      if (replaceArr[i] === 0 || mainArr[i] !== 0) {
-        continue;
-      } else {
-        mainArr[i] = replaceArr[i];
-      }
-    }
-  }
-
-  findSliceInSharedPlace() {
-    const sharedPlaceImages = [];
-
-    const base = Math.floor(
-      this.nrrd_states.currentIndex *
-      this.nrrd_states.ratios[this.protectedData.axis]
+    this.imageStoreHelper.replaceHorizontalRowPixels(
+      paintImageArray, length, ratio, markedArr, targetWidth, convertIndex
     );
-
-    for (let i = 1; i <= 3; i++) {
-      const index = this.nrrd_states.currentIndex - i;
-      if (index < this.nrrd_states.minIndex) {
-        break;
-      } else {
-        const newIndex = Math.floor(
-          index * this.nrrd_states.ratios[this.protectedData.axis]
-        );
-        if (newIndex === base) {
-          sharedPlaceImages.push(
-            this.protectedData.maskData.paintImages[this.protectedData.axis][
-              index
-            ].image
-          );
-        }
-      }
-    }
-
-    for (let i = 1; i <= 3; i++) {
-      const index = this.nrrd_states.currentIndex + i;
-      if (index > this.nrrd_states.maxIndex) {
-        break;
-      } else {
-        const newIndex = Math.floor(
-          index * this.nrrd_states.ratios[this.protectedData.axis]
-        );
-        if (newIndex === base) {
-          sharedPlaceImages.push(
-            this.protectedData.maskData.paintImages[this.protectedData.axis][
-              index
-            ].image
-          );
-        }
-      }
-    }
-    return sharedPlaceImages;
   }
 
-  /******************************** Utils gui related functions ***************************************/
+  /******************************** Utils gui related functions (delegated to ContrastTool) ***************************************/
 
-  /**
-   * Set up root container events fns for drag function
-   * @param callback 
-   */
   setupConrastEvents(callback: (step: number, towards: "horizental" | "vertical") => void) {
-
-    this.contrastEventPrameters.w = this.container.offsetWidth;
-    this.contrastEventPrameters.h = this.container.offsetHeight;
-
-    this.contrastEventPrameters.handleOnContrastMouseDown = (ev: MouseEvent) => {
-      if (ev.button === 0) {
-        this.contrastEventPrameters.x = ev.offsetX / this.contrastEventPrameters.x;
-        this.contrastEventPrameters.y = ev.offsetY / this.contrastEventPrameters.h;
-        this.container.addEventListener(
-          "pointermove",
-          this.contrastEventPrameters.handleOnContrastMouseMove)
-      }
-    }
-    this.contrastEventPrameters.handleOnContrastMouseUp = (ev: MouseEvent) => {
-      this.container.removeEventListener(
-        "pointermove",
-        this.contrastEventPrameters.handleOnContrastMouseMove)
-    }
-
-    this.contrastEventPrameters.handleOnContrastMouseMove = throttle((ev: MouseEvent) => {
-      if (this.contrastEventPrameters.y - ev.offsetY / this.contrastEventPrameters.h >= 0) {
-        this.contrastEventPrameters.move_y = -Math.ceil(
-          (this.contrastEventPrameters.y - ev.offsetY / this.contrastEventPrameters.h) * 10
-        );
-      } else {
-        this.contrastEventPrameters.move_y = -Math.floor(
-          (this.contrastEventPrameters.y - ev.offsetY / this.contrastEventPrameters.h) * 10
-        );
-      }
-
-      if (this.contrastEventPrameters.move_y !== 0 && Math.abs(this.contrastEventPrameters.move_y) === 1) {
-        callback(this.contrastEventPrameters.move_y, "vertical");
-      }
-      if (this.contrastEventPrameters.x - ev.offsetX / this.contrastEventPrameters.w >= 0) {
-        this.contrastEventPrameters.move_x = -Math.ceil(
-          (this.contrastEventPrameters.x - ev.offsetX / this.contrastEventPrameters.w) * 10
-        );
-      } else {
-        this.contrastEventPrameters.move_x = -Math.floor(
-          (this.contrastEventPrameters.x - ev.offsetX / this.contrastEventPrameters.w) * 10
-        );
-      }
-      if (this.contrastEventPrameters.move_x !== 0 && Math.abs(this.contrastEventPrameters.move_x) === 1) {
-        callback(this.contrastEventPrameters.move_x, "horizental");
-      }
-
-      this.contrastEventPrameters.x = ev.offsetX / this.contrastEventPrameters.w;
-      this.contrastEventPrameters.y = ev.offsetY / this.contrastEventPrameters.h;
-
-    }, 100)
+    this.contrastTool.setupConrastEvents(callback);
   }
 
   configContrastDragMode = () => {
-    this.container.style.cursor = "pointer";
-    this.container.addEventListener(
-      "pointerdown",
-      this.contrastEventPrameters.handleOnContrastMouseDown,
-      true
-    );
-    this.container.addEventListener(
-      "pointerup",
-      this.contrastEventPrameters.handleOnContrastMouseUp,
-      true
-    );
+    this.contrastTool.configContrastDragMode();
   };
 
   removeContrastDragMode = () => {
-    this.container.style.cursor = "";
-    this.container.removeEventListener(
-      "pointerdown",
-      this.contrastEventPrameters.handleOnContrastMouseDown,
-      true
-    );
-    this.container.removeEventListener(
-      "pointermove",
-      this.contrastEventPrameters.handleOnContrastMouseMove,
-      true);
-    this.container.removeEventListener(
-      "pointerup",
-      this.contrastEventPrameters.handleOnContrastMouseUp,
-      true
-    );
-    this.container.removeEventListener(
-      "pointerleave",
-      this.contrastEventPrameters.handleOnContrastMouseLeave,
-      true
-    );
-    this.setIsDrawFalse(1000);
+    this.contrastTool.removeContrastDragMode();
   };
 
   updateSlicesContrast(value: number, flag: string) {
-
-    switch (flag) {
-      case "lowerThreshold":
-        this.protectedData.displaySlices.forEach((slice, index) => {
-          slice.volume.lowerThreshold = value;
-        });
-        break;
-      case "upperThreshold":
-        this.protectedData.displaySlices.forEach((slice, index) => {
-          slice.volume.upperThreshold = value;
-        });
-        break;
-      case "windowLow":
-        this.protectedData.displaySlices.forEach((slice, index) => {
-          slice.volume.windowLow = value;
-        });
-        break;
-      case "windowHigh":
-        this.protectedData.displaySlices.forEach((slice, index) => {
-          slice.volume.windowHigh = value;
-        });
-        break;
-    }
-    this.repraintCurrentContrastSlice();
+    this.contrastTool.updateSlicesContrast(value, flag);
   }
+
   repraintCurrentContrastSlice() {
-    this.setSyncsliceNum();
-    this.protectedData.displaySlices.forEach((slice, index) => {
-      slice.repaint.call(slice);
-    });
+    this.contrastTool.repraintCurrentContrastSlice();
   }
 }

@@ -38,9 +38,9 @@ export class NrrdTools extends DrawToolCore {
     this.container = container;
 
     this.storedPaintImages = {
-      label1: this.protectedData.maskData.paintImagesLabel1,
-      label2: this.protectedData.maskData.paintImagesLabel2,
-      label3: this.protectedData.maskData.paintImagesLabel3,
+      layer1: this.protectedData.maskData.paintImagesLayer1,
+      layer2: this.protectedData.maskData.paintImagesLayer2,
+      layer3: this.protectedData.maskData.paintImagesLayer3,
     };
 
     this.protectedData.previousDrawingImage =
@@ -137,7 +137,7 @@ export class NrrdTools extends DrawToolCore {
       setSyncsliceNum: this.setSyncsliceNum,
       resetLayerCanvas: this.resetLayerCanvas,
       redrawDisplayCanvas: this.redrawDisplayCanvas,
-      reloadMaskToLabel: this.reloadMaskToLabel,
+      reloadMaskToLayer: this.reloadMaskToLayer,
       flipDisplayImageByAxis: this.flipDisplayImageByAxis,
       filterDrawedImage: this.filterDrawedImage,
       setEmptyCanvasSize: this.setEmptyCanvasSize,
@@ -152,8 +152,8 @@ export class NrrdTools extends DrawToolCore {
       replaceVerticalColPixels: this.replaceVerticalColPixels,
       replaceHorizontalRowPixels: this.replaceHorizontalRowPixels,
       storeEachLayerImage: this.storeEachLayerImage,
-      storeImageToLabel: this.storeImageToLabel,
-      getRestLabel: this.getRestLabel,
+      storeImageToLayer: this.storeImageToLayer,
+      getRestLayer: this.getRestLayer,
       setIsDrawFalse: this.setIsDrawFalse,
       initPaintImages: this.initPaintImages,
       createEmptyPaintImage: this.createEmptyPaintImage,
@@ -250,7 +250,7 @@ export class NrrdTools extends DrawToolCore {
     this.afterLoadSlice();
   }
 
-  private loadingMaskByLabel(
+  private loadingMaskByLayer(
     masks: exportPaintImageType[],
     index: number,
     imageData: ImageData
@@ -281,42 +281,42 @@ export class NrrdTools extends DrawToolCore {
 
       this.setEmptyCanvasSize();
 
-      const len = masksData["label1"].length;
+      const len = masksData["layer1"].length;
       for (let i = 0; i < len; i++) {
         let imageData = this.protectedData.ctxes.emptyCtx.createImageData(
           this.nrrd_states.nrrd_x_pixel,
           this.nrrd_states.nrrd_y_pixel
         );
-        let imageDataLabel1, imageDataLabel2, imageDataLabel3;
-        if (masksData["label1"][i].data.length > 0) {
+        let imageDataLayer1, imageDataLayer2, imageDataLayer3;
+        if (masksData["layer1"][i].data.length > 0) {
           this.setEmptyCanvasSize();
-          imageDataLabel1 = this.loadingMaskByLabel(
-            masksData["label1"],
+          imageDataLayer1 = this.loadingMaskByLayer(
+            masksData["layer1"],
             i,
             imageData
           );
-          this.protectedData.ctxes.emptyCtx.putImageData(imageDataLabel1, 0, 0);
-          this.storeEachLayerImage(i, "label1");
+          this.protectedData.ctxes.emptyCtx.putImageData(imageDataLayer1, 0, 0);
+          this.storeEachLayerImage(i, "layer1");
         }
-        if (masksData["label2"][i].data.length > 0) {
+        if (masksData["layer2"][i].data.length > 0) {
           this.setEmptyCanvasSize();
-          imageDataLabel2 = this.loadingMaskByLabel(
-            masksData["label2"],
+          imageDataLayer2 = this.loadingMaskByLayer(
+            masksData["layer2"],
             i,
             imageData
           );
-          this.protectedData.ctxes.emptyCtx.putImageData(imageDataLabel2, 0, 0);
-          this.storeEachLayerImage(i, "label2");
+          this.protectedData.ctxes.emptyCtx.putImageData(imageDataLayer2, 0, 0);
+          this.storeEachLayerImage(i, "layer2");
         }
-        if (masksData["label3"][i].data.length > 0) {
+        if (masksData["layer3"][i].data.length > 0) {
           this.setEmptyCanvasSize();
-          imageDataLabel3 = this.loadingMaskByLabel(
-            masksData["label3"],
+          imageDataLayer3 = this.loadingMaskByLayer(
+            masksData["layer3"],
             i,
             imageData
           );
-          this.protectedData.ctxes.emptyCtx.putImageData(imageDataLabel3, 0, 0);
-          this.storeEachLayerImage(i, "label3");
+          this.protectedData.ctxes.emptyCtx.putImageData(imageDataLayer3, 0, 0);
+          this.storeEachLayerImage(i, "layer3");
         }
         this.setEmptyCanvasSize();
         this.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
@@ -346,6 +346,8 @@ export class NrrdTools extends DrawToolCore {
     return this.nrrd_states.spaceOrigin;
   }
   getMaskData(): IMaskData {
+    console.log("getMaskData:", this.protectedData.maskData);
+    
     return this.protectedData.maskData;
   }
 
@@ -397,15 +399,15 @@ export class NrrdTools extends DrawToolCore {
     );
     this.createEmptyPaintImage(
       dimensions,
-      this.protectedData.maskData.paintImagesLabel1
+      this.protectedData.maskData.paintImagesLayer1
     );
     this.createEmptyPaintImage(
       dimensions,
-      this.protectedData.maskData.paintImagesLabel2
+      this.protectedData.maskData.paintImagesLayer2
     );
     this.createEmptyPaintImage(
       dimensions,
-      this.protectedData.maskData.paintImagesLabel3
+      this.protectedData.maskData.paintImagesLayer3
     );
   }
 
@@ -634,15 +636,15 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.maskData.paintImages.x.length = 0;
     this.protectedData.maskData.paintImages.y.length = 0;
     this.protectedData.maskData.paintImages.z.length = 0;
-    this.protectedData.maskData.paintImagesLabel1.x.length = 0;
-    this.protectedData.maskData.paintImagesLabel1.y.length = 0;
-    this.protectedData.maskData.paintImagesLabel1.z.length = 0;
-    this.protectedData.maskData.paintImagesLabel2.x.length = 0;
-    this.protectedData.maskData.paintImagesLabel2.y.length = 0;
-    this.protectedData.maskData.paintImagesLabel2.z.length = 0;
-    this.protectedData.maskData.paintImagesLabel3.x.length = 0;
-    this.protectedData.maskData.paintImagesLabel3.y.length = 0;
-    this.protectedData.maskData.paintImagesLabel3.z.length = 0;
+    this.protectedData.maskData.paintImagesLayer1.x.length = 0;
+    this.protectedData.maskData.paintImagesLayer1.y.length = 0;
+    this.protectedData.maskData.paintImagesLayer1.z.length = 0;
+    this.protectedData.maskData.paintImagesLayer2.x.length = 0;
+    this.protectedData.maskData.paintImagesLayer2.y.length = 0;
+    this.protectedData.maskData.paintImagesLayer2.z.length = 0;
+    this.protectedData.maskData.paintImagesLayer3.x.length = 0;
+    this.protectedData.maskData.paintImagesLayer3.y.length = 0;
+    this.protectedData.maskData.paintImagesLayer3.z.length = 0;
 
     this.clearDictionary(this.protectedData.skipSlicesDic);
 
@@ -853,7 +855,7 @@ export class NrrdTools extends DrawToolCore {
     this.undoArray = [
       {
         sliceIndex: this.nrrd_states.currentIndex,
-        layers: { label1: [], label2: [], label3: [] },
+        layers: { layer1: [], layer2: [], layer3: [] },
       },
     ];
 
@@ -910,15 +912,15 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.maskData.paintImages.x.length = 0;
     this.protectedData.maskData.paintImages.y.length = 0;
     this.protectedData.maskData.paintImages.z.length = 0;
-    this.protectedData.maskData.paintImagesLabel1.x.length = 0;
-    this.protectedData.maskData.paintImagesLabel1.y.length = 0;
-    this.protectedData.maskData.paintImagesLabel1.z.length = 0;
-    this.protectedData.maskData.paintImagesLabel2.x.length = 0;
-    this.protectedData.maskData.paintImagesLabel2.y.length = 0;
-    this.protectedData.maskData.paintImagesLabel2.z.length = 0;
-    this.protectedData.maskData.paintImagesLabel3.x.length = 0;
-    this.protectedData.maskData.paintImagesLabel3.y.length = 0;
-    this.protectedData.maskData.paintImagesLabel3.z.length = 0;
+    this.protectedData.maskData.paintImagesLayer1.x.length = 0;
+    this.protectedData.maskData.paintImagesLayer1.y.length = 0;
+    this.protectedData.maskData.paintImagesLayer1.z.length = 0;
+    this.protectedData.maskData.paintImagesLayer2.x.length = 0;
+    this.protectedData.maskData.paintImagesLayer2.y.length = 0;
+    this.protectedData.maskData.paintImagesLayer2.z.length = 0;
+    this.protectedData.maskData.paintImagesLayer3.x.length = 0;
+    this.protectedData.maskData.paintImagesLayer3.y.length = 0;
+    this.protectedData.maskData.paintImagesLayer3.z.length = 0;
     this.initPaintImages(this.nrrd_states.dimensions);
   }
 
@@ -1032,32 +1034,32 @@ export class NrrdTools extends DrawToolCore {
       this.nrrd_states.changedHeight;
 
     this.redrawDisplayCanvas();
-    this.reloadMaskToLabel(
+    this.reloadMaskToLayer(
       this.protectedData.maskData.paintImages,
       this.protectedData.ctxes.drawingLayerMasterCtx
     );
-    this.reloadMaskToLabel(
-      this.protectedData.maskData.paintImagesLabel1,
+    this.reloadMaskToLayer(
+      this.protectedData.maskData.paintImagesLayer1,
       this.protectedData.ctxes.drawingLayerOneCtx
     );
-    this.reloadMaskToLabel(
-      this.protectedData.maskData.paintImagesLabel2,
+    this.reloadMaskToLayer(
+      this.protectedData.maskData.paintImagesLayer2,
       this.protectedData.ctxes.drawingLayerTwoCtx
     );
     // need to check here again: why use ctx two not three. now modify to three
-    // this.reloadMaskToLabel(this.protectedData.maskData.paintImagesLabel3, this.protectedData.ctxes.drawingLayerTwoCtx);
-    this.reloadMaskToLabel(
-      this.protectedData.maskData.paintImagesLabel3,
+    // this.reloadMaskToLayer(this.protectedData.maskData.paintImagesLayer3, this.protectedData.ctxes.drawingLayerTwoCtx);
+    this.reloadMaskToLayer(
+      this.protectedData.maskData.paintImagesLayer3,
       this.protectedData.ctxes.drawingLayerThreeCtx
     );
   }
 
   /**
-   * Used to init the mask on each label and reload
+   * Used to init the mask on each Layer and reload
    * @param paintImages
    * @param ctx
    */
-  private reloadMaskToLabel(
+  private reloadMaskToLayer(
     paintImages: IPaintImages,
     ctx: CanvasRenderingContext2D
   ) {

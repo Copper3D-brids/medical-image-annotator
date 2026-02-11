@@ -72,15 +72,15 @@ interface IPaintImage {
   image: ImageData;
 }
 interface IStoredPaintImages {
-  label1: IPaintImages;
-  label2: IPaintImages;
-  label3: IPaintImages;
+  layer1: IPaintImages;
+  layer2: IPaintImages;
+  layer3: IPaintImages;
 }
 type IMaskData = {
-  paintImagesLabel1: IPaintImages;
-  paintImagesLabel2: IPaintImages;
-  paintImagesLabel3: IPaintImages;
-  // used to store display marks data with multiple labels
+  paintImagesLayer1: IPaintImages;
+  paintImagesLayer2: IPaintImages;
+  paintImagesLayer3: IPaintImages;
+  // used to store display marks data with multiple layers
   paintImages: IPaintImages;
 };
 
@@ -135,7 +135,7 @@ interface IGUIStates {
   brushColor: string;
   brushAndEraserSize: number;
   cursor: string;
-  label: string;
+  layer: string;
   cal_distance: "tumour" | "skin" | "nipple" | "ribcage";
   sphere: boolean;
   calculator: boolean;
@@ -209,7 +209,7 @@ interface INrrdStates {
   previousPanelL: number;
   previousPanelT: number;
   switchSliceFlag: boolean;
-  labels: ["label1", "label2", "label3"];
+  layers: ["layer1", "layer2", "layer3"];
 
   configKeyBoard: boolean;
   keyboardSettings: IKeyBoardSettings;
@@ -217,7 +217,7 @@ interface INrrdStates {
   getMask: (
     mask: ImageData,
     sliceId: number,
-    label: string,
+    layer: string,
     width: number,
     height: number,
     clearAllFlag: boolean
@@ -236,7 +236,7 @@ interface IDrawOpts {
   getMaskData?: (
     mask: ImageData,
     sliceId: number,
-    label: string,
+    layer: string,
     width: number,
     height: number,
     clearAllFlag?: boolean
@@ -245,9 +245,9 @@ interface IDrawOpts {
   getCalculateSpherePositionsData?: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => void;
 }
 type UndoLayerType = {
-  label1: Array<HTMLImageElement>;
-  label2: Array<HTMLImageElement>;
-  label3: Array<HTMLImageElement>;
+  layer1: Array<HTMLImageElement>;
+  layer2: Array<HTMLImageElement>;
+  layer3: Array<HTMLImageElement>;
 };
 
 interface IUndoType {
@@ -341,9 +341,9 @@ interface IGuiParameterSettings {
     onFinished: () => void,
   },
   advance: {
-    label: {
-      name: "Label",
-      value: ["label1", "label2", "label3"],
+    layer: {
+      name: "Layer",
+      value: ["layer1", "layer2", "layer3"],
     },
     cursor: {
       name: "CursorIcon",

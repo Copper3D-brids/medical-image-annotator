@@ -63,7 +63,7 @@ export class CommToolsData {
     previousPanelL: -99999,
     previousPanelT: -99999,
     switchSliceFlag: false,
-    labels: ["label1", "label2", "label3"],
+    layers: ["layer1", "layer2", "layer3"],
 
     configKeyBoard: false,
     keyboardSettings: {
@@ -77,7 +77,7 @@ export class CommToolsData {
     getMask: (
       mask: ImageData,
       sliceId: number,
-      label: string,
+      layer: string,
       width: number,
       height: number,
       clearAllFlag: boolean
@@ -120,7 +120,7 @@ export class CommToolsData {
     brushColor: "#00ff00",
     brushAndEraserSize: 15,
     cursor: "dot",
-    label: "label1",
+    layer: "layer1",
     cal_distance: "tumour",
     sphere: false,
     calculator: false,
@@ -177,12 +177,12 @@ export class CommToolsData {
       Is_Draw: false,
       axis: "z",
       maskData: {
-        // used to store one label all marks
-        paintImagesLabel1: { x: [], y: [], z: [] },
-        paintImagesLabel2: { x: [], y: [], z: [] },
-        paintImagesLabel3: { x: [], y: [], z: [] },
+        // used to store one layer all marks
+        paintImagesLayer1: { x: [], y: [], z: [] },
+        paintImagesLayer2: { x: [], y: [], z: [] },
+        paintImagesLayer3: { x: [], y: [], z: [] },
 
-        // used to store display marks with multiple labels
+        // used to store display marks with multiple layers
         paintImages: { x: [], y: [], z: [] },
       },
       canvases: {

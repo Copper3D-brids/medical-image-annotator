@@ -34,7 +34,7 @@ interface IConfigGUI {
   setSyncsliceNum: () => void;
   resetLayerCanvas: () => void;
   redrawDisplayCanvas: () => void;
-  reloadMaskToLabel: (
+  reloadMaskToLayer: (
     paintImages: IPaintImages,
     ctx: CanvasRenderingContext2D
   ) => void;
@@ -45,7 +45,7 @@ interface IConfigGUI {
     paintedImages: IPaintImages
   ) => IPaintImage;
   setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;
-  storeAllImages: (index: number, label: string) => void;
+  storeAllImages: (index: number, layer: string) => void;
   drawImageOnEmptyImage: (canvas: HTMLCanvasElement) => void;
   checkSharedPlaceSlice: (
     width: number,
@@ -77,13 +77,13 @@ interface IConfigGUI {
     targetWidth: number,
     convertIndex: number
   ) => void;
-  storeEachLayerImage: (index: number, label: string) => void;
-  storeImageToLabel: (
+  storeEachLayerImage: (index: number, layer: string) => void;
+  storeImageToLayer: (
     index: number,
     canvas: HTMLCanvasElement,
     paintedImages: IPaintImages
   ) => ImageData;
-  getRestLabel: () => ("label1" | "label2" | "label3")[];
+  getRestLayer: () => ("layer1" | "layer2" | "layer3")[];
   setIsDrawFalse: (target: number) => void;
   initPaintImages: (dimensions: Array<number>) => void;
   createEmptyPaintImage: (
@@ -160,22 +160,22 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
 
   advanceFolder
     .add(configs.gui_states, "cal_distance", ["tumour", "skin", "ribcage", "nipple"])
-    .name("Label")
+    .name("Layer")
     .onChange((val) => {
       updateCalDistance(val)
     });
 
   advanceFolder
-    .add(configs.gui_states, "label", ["label1", "label2", "label3"])
-    .name("Label")
+    .add(configs.gui_states, "layer", ["layer1", "layer2", "layer3"])
+    .name("Layer")
     .onChange((val) => {
-      if (val === "label1") {
+      if (val === "layer1") {
         configs.gui_states.fillColor = "#00ff00";
         configs.gui_states.brushColor = "#00ff00";
-      } else if (val === "label2") {
+      } else if (val === "layer2") {
         configs.gui_states.fillColor = "#ff0000";
         configs.gui_states.brushColor = "#ff0000";
-      } else if (val === "label3") {
+      } else if (val === "layer3") {
         configs.gui_states.fillColor = "#0000ff";
         configs.gui_states.brushColor = "#0000ff";
       }
@@ -478,9 +478,9 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
       onFinished: updateGuiImageContrastOnFinished,
     },
     advance: {
-      label: {
-        name: "Label",
-        value: ["label1", "label2", "label3"],
+      layer: {
+        name: "Layer",
+        value: ["layer1", "layer2", "layer3"],
       },
       cursor: {
         name: "CursorIcon",

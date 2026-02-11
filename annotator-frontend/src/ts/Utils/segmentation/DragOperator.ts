@@ -11,15 +11,8 @@ import {
 } from "./coreTools/coreType";
 import { createShowSliceNumberDiv } from "./coreTools/divControlTools";
 import type { EventRouter } from "./eventRouter";
-
-interface IDragEffectCanvases {
-  drawingCanvasLayerMaster: HTMLCanvasElement;
-  drawingCanvasLayerOne: HTMLCanvasElement;
-  drawingCanvasLayerTwo: HTMLCanvasElement;
-  drawingCanvasLayerThree: HTMLCanvasElement;
-  displayCanvas: HTMLCanvasElement;
-  [key: string]: HTMLCanvasElement;
-}
+import { DragSliceTool } from "./tools/DragSliceTool";
+import type { ToolContext } from "./tools/BaseTool";
 
 export class DragOperator {
   container: HTMLElement;
@@ -39,7 +32,7 @@ export class DragOperator {
   private nrrd_states: INrrdStates;
   private gui_states: IGUIStates;
   private protectedData: IProtected;
-  private dragEffectCanvases: IDragEffectCanvases | undefined;
+  private dragSliceTool!: DragSliceTool;
 
   private setSyncsliceNum: () => void;
   private setIsDrawFalse: (target: number) => void;
@@ -90,7 +83,8 @@ export class DragOperator {
     for (let i = 0; i < this.gui_states.max_sensitive; i++) {
       this.sensitiveArray.push((i + 1) / 20);
     }
-    this.dragEffectCanvases = {
+
+    const dragEffectCanvases = {
       drawingCanvasLayerMaster:
         this.protectedData.canvases.drawingCanvasLayerMaster,
       drawingCanvasLayerOne: this.protectedData.canvases.drawingCanvasLayerOne,
@@ -99,10 +93,32 @@ export class DragOperator {
         this.protectedData.canvases.drawingCanvasLayerThree,
       displayCanvas: this.protectedData.canvases.displayCanvas,
     };
+
+    const toolCtx = {
+      nrrd_states: this.nrrd_states,
+      gui_states: this.gui_states,
+      protectedData: this.protectedData,
+      cursorPage: {} as any,
+    } as ToolContext;
+
+    this.dragSliceTool = new DragSliceTool(
+      toolCtx,
+      {
+        setSyncsliceNum: () => this.setSyncsliceNum(),
+        setIsDrawFalse: (target) => this.setIsDrawFalse(target),
+        flipDisplayImageByAxis: () => this.flipDisplayImageByAxis(),
+        setEmptyCanvasSize: (axis?) => this.setEmptyCanvasSize(axis),
+        filterDrawedImage: (axis, sliceIndex, paintedImages) =>
+          this.filterDrawedImage(axis, sliceIndex, paintedImages),
+      },
+      this.showDragNumberDiv,
+      dragEffectCanvases
+    );
   }
 
   setShowDragNumberDiv(sliceIndexContainer: HTMLDivElement) {
     this.showDragNumberDiv = sliceIndexContainer;
+    this.dragSliceTool.setShowDragNumberDiv(sliceIndexContainer);
   }
 
   /**
@@ -228,199 +244,15 @@ export class DragOperator {
   }
 
   updateIndex(move: number) {
-    let sliceModifyNum = 0;
-    let contrastModifyNum = 0;
-    if (this.nrrd_states.showContrast) {
-      contrastModifyNum = move % this.protectedData.displaySlices.length;
-      this.nrrd_states.contrastNum += contrastModifyNum;
-      if (move > 0) {
-        //  move forward
-        if (this.nrrd_states.currentIndex <= this.nrrd_states.maxIndex) {
-          sliceModifyNum = Math.floor(
-            move / this.protectedData.displaySlices.length
-          );
-
-          if (
-            this.nrrd_states.contrastNum >
-            this.protectedData.displaySlices.length - 1
-          ) {
-            sliceModifyNum += 1;
-            this.nrrd_states.contrastNum -=
-              this.protectedData.displaySlices.length;
-          }
-        } else {
-          sliceModifyNum = 0;
-        }
-      } else {
-        // move back
-        sliceModifyNum = Math.ceil(
-          move / this.protectedData.displaySlices.length
-        );
-        if (this.nrrd_states.contrastNum < 0) {
-          this.nrrd_states.contrastNum +=
-            this.protectedData.displaySlices.length;
-          sliceModifyNum -= 1;
-        }
-      }
-    } else {
-      sliceModifyNum = move;
-    }
-
-    // let newIndex = this.nrrd_states.oldIndex + sliceModifyNum;
-    let newIndex = this.nrrd_states.currentIndex + sliceModifyNum;
-
-    if (
-      newIndex != this.nrrd_states.currentIndex ||
-      this.nrrd_states.showContrast
-    ) {
-      if (newIndex > this.nrrd_states.maxIndex) {
-        newIndex = this.nrrd_states.maxIndex;
-        this.nrrd_states.contrastNum =
-          this.protectedData.displaySlices.length - 1;
-      } else if (newIndex < this.nrrd_states.minIndex) {
-        newIndex = this.nrrd_states.minIndex;
-        this.nrrd_states.contrastNum = 0;
-      } else {
-        this.protectedData.mainPreSlices.index =
-          newIndex * this.nrrd_states.RSARatio;
-        // clear drawing canvas, and display next slicez
-        this.setSyncsliceNum();
-
-        let isSameIndex = true;
-        if (newIndex != this.nrrd_states.currentIndex) {
-          this.nrrd_states.switchSliceFlag = true;
-          isSameIndex = false;
-        }
-
-        this.cleanCanvases(isSameIndex);
-
-        if (this.nrrd_states.changedWidth === 0) {
-          this.nrrd_states.changedWidth = this.nrrd_states.originWidth;
-          this.nrrd_states.changedHeight = this.nrrd_states.originHeight;
-        }
-
-        // get the slice that need to be updated on displayCanvas
-        let needToUpdateSlice = this.updateCurrentContrastSlice();
-
-        needToUpdateSlice.repaint.call(needToUpdateSlice);
-        this.nrrd_states.currentIndex = newIndex;
-        this.drawDragSlice(needToUpdateSlice.canvas);
-      }
-
-      this.nrrd_states.oldIndex = newIndex * this.nrrd_states.RSARatio;
-      this.updateShowNumDiv(this.nrrd_states.contrastNum);
-    }
-  }
-
-  private drawDragSlice(canvas: any) {
-    this.protectedData.ctxes.displayCtx.save();
-    //  flip images
-    this.flipDisplayImageByAxis();
-    this.protectedData.ctxes.displayCtx.drawImage(
-      canvas,
-      0,
-      0,
-      this.nrrd_states.changedWidth,
-      this.nrrd_states.changedHeight
-    );
-
-    this.protectedData.ctxes.displayCtx.restore();
-    if (
-      this.protectedData.maskData.paintImages.x.length > 0 ||
-      this.protectedData.maskData.paintImages.y.length > 0 ||
-      this.protectedData.maskData.paintImages.z.length > 0
-    ) {
-      if (this.nrrd_states.switchSliceFlag) {
-        // 0929
-        // this.paintedImage = this.filterDrawedImage(
-        //   this.protectedData.axis,
-        //   this.nrrd_states.currentIndex,
-        //  this.protectedData.maskData.paintImages
-        // );
-        this.drawMaskToLabelCtx(
-          this.protectedData.maskData.paintImages,
-          this.protectedData.ctxes.drawingLayerMasterCtx
-        );
-        this.drawMaskToLabelCtx(
-          this.protectedData.maskData.paintImagesLabel1,
-          this.protectedData.ctxes.drawingLayerOneCtx
-        );
-        this.drawMaskToLabelCtx(
-          this.protectedData.maskData.paintImagesLabel2,
-          this.protectedData.ctxes.drawingLayerTwoCtx
-        );
-        this.drawMaskToLabelCtx(
-          this.protectedData.maskData.paintImagesLabel3,
-          this.protectedData.ctxes.drawingLayerThreeCtx
-        );
-
-        this.nrrd_states.switchSliceFlag = false;
-      }
-    }
-  }
-
-  private drawMaskToLabelCtx(
-    paintedImages: IPaintImages,
-    ctx: CanvasRenderingContext2D
-  ) {
-    const paintedImage = this.filterDrawedImage(
-      this.protectedData.axis,
-      this.nrrd_states.currentIndex,
-      paintedImages
-    );
-
-    if (paintedImage?.image) {
-      // redraw the stored data to empty point 2
-      this.setEmptyCanvasSize();
-
-      this.protectedData.ctxes.emptyCtx.putImageData(paintedImage.image, 0, 0);
-      ctx.drawImage(
-        this.protectedData.canvases.emptyCanvas,
-        0,
-        0,
-        this.nrrd_states.changedWidth,
-        this.nrrd_states.changedHeight
-      );
-    }
-  }
-
-  private cleanCanvases(flag: boolean) {
-    for (const name in this.dragEffectCanvases) {
-      if (flag) {
-        if (name === "displayCanvas") {
-          this.dragEffectCanvases.displayCanvas.width =
-            this.dragEffectCanvases.displayCanvas.width;
-        }
-      } else {
-        this.dragEffectCanvases[name].width =
-          this.dragEffectCanvases[name].width;
-      }
-    }
+    this.dragSliceTool.updateIndex(move);
   }
 
   updateShowNumDiv(contrastNum: number) {
-    if (this.protectedData.mainPreSlices) {
-      if (this.nrrd_states.currentIndex > this.nrrd_states.maxIndex) {
-        this.nrrd_states.currentIndex = this.nrrd_states.maxIndex;
-      }
-      if (this.nrrd_states.showContrast) {
-        (
-          this.showDragNumberDiv as HTMLDivElement
-        ).innerHTML = `ContrastNum: ${contrastNum}/${this.protectedData.displaySlices.length - 1
-        } SliceNum: ${this.nrrd_states.currentIndex}/${this.nrrd_states.maxIndex
-          }`;
-      } else {
-        (
-          this.showDragNumberDiv as HTMLDivElement
-        ).innerHTML = `SliceNum: ${this.nrrd_states.currentIndex}/${this.nrrd_states.maxIndex}`;
-      }
-    }
+    this.dragSliceTool.updateShowNumDiv(contrastNum);
   }
 
   updateCurrentContrastSlice() {
-    this.protectedData.currentShowingSlice =
-      this.protectedData.displaySlices[this.nrrd_states.contrastNum];
-    return this.protectedData.currentShowingSlice;
+    return this.dragSliceTool.updateCurrentContrastSlice();
   }
 
   configDragMode = () => {
