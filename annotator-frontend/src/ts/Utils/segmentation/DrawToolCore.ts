@@ -327,7 +327,8 @@ export class DrawToolCore extends CommToolsData {
     } else {
       this.drawingPrameters.handleMouseZoomSliceWheel = this.configMouseSliceWheel() as any;
     }
-    // init to add it
+    // Keep wheel as direct addEventListener due to dynamic add/remove patterns in handleOnDrawingMouseUp
+    // EventRouter routing would conflict with the dynamic wheel switching (zoom vs sphere wheel)
     this.protectedData.canvases.drawingCanvas.addEventListener(
       "wheel",
       this.drawingPrameters.handleMouseZoomSliceWheel,
@@ -489,12 +490,20 @@ export class DrawToolCore extends CommToolsData {
         return;
       }
     };
-    // disable browser right click menu
-    this.protectedData.canvases.drawingCanvas.addEventListener(
-      "pointerdown",
-      this.drawingPrameters.handleOnDrawingMouseDown,
-      true
-    );
+    // Route pointerdown through EventRouter for centralized event management
+    // The handler is still the existing logic, just registered through EventRouter
+    if (this.eventRouter) {
+      this.eventRouter.setPointerDownHandler((e: PointerEvent) => {
+        this.drawingPrameters.handleOnDrawingMouseDown(e);
+      });
+    } else {
+      // Fallback for legacy mode without EventRouter
+      this.protectedData.canvases.drawingCanvas.addEventListener(
+        "pointerdown",
+        this.drawingPrameters.handleOnDrawingMouseDown,
+        true
+      );
+    }
 
     const sphere = (e: MouseEvent) => {
       // set sphere size

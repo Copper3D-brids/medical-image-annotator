@@ -74,15 +74,14 @@ sequenceDiagram
 
 ---
 
-## Remaining Work (Phase 4)
+## Phase 4: Pointer Events (Partial) ✅
 
-Found 19+ `addEventListener` calls in `DrawToolCore.ts` for pointer/wheel events:
-- Lines 237, 266, 331, 371, 442, 446, 457, 480, 484, 493, 523, 528, 666, 702, 713, 751, 2095, 2141, 2146
+Routed main `pointerdown` through EventRouter in `paintOnCanvas()`:
 
-These are dynamically added/removed based on tool state (pencil, brush, eraser, sphere, etc.) and would require significant refactoring to route through EventRouter.
+render_diffs(file:///c:/Users/lgao142/Desktop/clinial%20dashboard%20plugin%20work%202025/medical-image-annotator-failed/annotator-frontend/src/ts/Utils/segmentation/DrawToolCore.ts)
 
-> [!NOTE]
-> Phase 4 is optional - the core keyboard event consolidation is complete. Pointer/wheel event migration can be done incrementally as needed.
+> [!WARNING]
+> Wheel events kept as direct `addEventListener` due to dynamic switching in `handleOnDrawingMouseUp` (5 occurrences switch between zoom wheel and sphere wheel).
 
 ---
 
