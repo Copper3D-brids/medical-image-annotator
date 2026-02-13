@@ -6,8 +6,6 @@ import {
   IProtected,
   IGUIStates,
   INrrdStates,
-  IPaintImage,
-  IPaintImages,
 } from "./coreTools/coreType";
 import { createShowSliceNumberDiv } from "./coreTools/divControlTools";
 import type { EventRouter } from "./eventRouter";
@@ -38,11 +36,7 @@ export class DragOperator {
   private setIsDrawFalse: (target: number) => void;
   private flipDisplayImageByAxis: () => void;
   private setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;
-  private filterDrawedImage: (
-    axis: "x" | "y" | "z",
-    sliceIndex: number,
-    paintedImages: IPaintImages
-  ) => IPaintImage;
+  private getCachedSliceImageData: (layer: string, axis: "x" | "y" | "z", sliceIndex: number) => ImageData | null;
 
   // EventRouter for centralized event handling
   private eventRouter: EventRouter | null = null;
@@ -58,11 +52,7 @@ export class DragOperator {
     setIsDrawFalse: (target: number) => void,
     flipDisplayImageByAxis: () => void,
     setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void,
-    filterDrawedImage: (
-      axis: "x" | "y" | "z",
-      sliceIndex: number,
-      paintedImages: IPaintImages
-    ) => IPaintImage
+    getCachedSliceImageData: (layer: string, axis: "x" | "y" | "z", sliceIndex: number) => ImageData | null
   ) {
     this.container = container;
     this.drawingPrameters = drawingPrameters;
@@ -74,7 +64,7 @@ export class DragOperator {
     this.setIsDrawFalse = setIsDrawFalse;
     this.flipDisplayImageByAxis = flipDisplayImageByAxis;
     this.setEmptyCanvasSize = setEmptyCanvasSize;
-    this.filterDrawedImage = filterDrawedImage;
+    this.getCachedSliceImageData = getCachedSliceImageData;
 
     this.showDragNumberDiv = createShowSliceNumberDiv();
     this.init();
@@ -108,8 +98,7 @@ export class DragOperator {
         setIsDrawFalse: (target) => this.setIsDrawFalse(target),
         flipDisplayImageByAxis: () => this.flipDisplayImageByAxis(),
         setEmptyCanvasSize: (axis?) => this.setEmptyCanvasSize(axis),
-        filterDrawedImage: (axis, sliceIndex, paintedImages) =>
-          this.filterDrawedImage(axis, sliceIndex, paintedImages),
+        getCachedSliceImageData: (layer, axis, sliceIndex) => this.getCachedSliceImageData(layer, axis, sliceIndex),
       },
       this.showDragNumberDiv,
       dragEffectCanvases

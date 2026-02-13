@@ -19,6 +19,7 @@ import { ZoomTool } from "./tools/ZoomTool";
 import { EraserTool } from "./tools/EraserTool";
 import { ImageStoreHelper } from "./tools/ImageStoreHelper";
 import type { ToolContext } from "./tools/BaseTool";
+import { MaskVolume } from "./core";
 
 export class DrawToolCore extends CommToolsData {
   container: HTMLElement;
@@ -86,6 +87,7 @@ export class DrawToolCore extends CommToolsData {
     this.imageStoreHelper = new ImageStoreHelper(toolCtx, {
       setEmptyCanvasSize: (axis?) => this.setEmptyCanvasSize(axis),
       drawImageOnEmptyImage: (canvas) => this.drawImageOnEmptyImage(canvas),
+      clearSliceCache: (layer, axis, sliceIndex) => this.clearSliceCache(layer, axis, sliceIndex),
     });
 
     this.sphereTool = new SphereTool(toolCtx, {
@@ -1038,7 +1040,7 @@ export class DrawToolCore extends CommToolsData {
 
   private useEraser() {
     console.log("use eraser");
-    
+
     return this.eraserTool.createClearArc();
   }
   // drawing canvas mouse zoom wheel
@@ -1129,7 +1131,10 @@ export class DrawToolCore extends CommToolsData {
   }
 
   /**
-   * Clear mask on current slice canvas
+   * Clear mask on current slice canvas.
+   *
+   * Phase 2 Day 8: Also clears the MaskVolume slice for all three layers
+   * before re-storing, ensuring volume and legacy storage stay in sync.
    */
   clearPaint() {
     this.protectedData.Is_Draw = true;
@@ -1141,6 +1146,18 @@ export class DrawToolCore extends CommToolsData {
     );
     this.protectedData.previousDrawingImage =
       this.protectedData.ctxes.emptyCtx.createImageData(1, 1);
+
+    // Phase 2: Clear volume slices for all layers on the current axis/index
+    try {
+      const axis = this.protectedData.axis;
+      const idx = this.nrrd_states.currentIndex;
+      const { layer1, layer2, layer3 } = this.protectedData.maskData.volumes;
+      layer1.clearSlice(idx, axis);
+      layer2.clearSlice(idx, axis);
+      layer3.clearSlice(idx, axis);
+    } catch {
+      // Volume not ready (1×1×1 placeholder) — continue with legacy path
+    }
 
     this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.layer);
     const restLayers = this.getRestLayer();

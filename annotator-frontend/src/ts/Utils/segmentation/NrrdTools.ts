@@ -19,6 +19,7 @@ import {
 } from "./coreTools/coreType";
 import { DragOperator } from "./DragOperator";
 import { DrawToolCore } from "./DrawToolCore";
+import { MaskVolume } from "./core";
 
 export class NrrdTools extends DrawToolCore {
   container: HTMLDivElement;
@@ -37,11 +38,7 @@ export class NrrdTools extends DrawToolCore {
     super(container);
     this.container = container;
 
-    this.storedPaintImages = {
-      layer1: this.protectedData.maskData.paintImagesLayer1,
-      layer2: this.protectedData.maskData.paintImagesLayer2,
-      layer3: this.protectedData.maskData.paintImagesLayer3,
-    };
+    // Phase 3: storedPaintImages removed (legacy ImageData storage no longer used)
 
     this.protectedData.previousDrawingImage =
       this.protectedData.ctxes.emptyCtx.createImageData(1, 1);
@@ -52,11 +49,11 @@ export class NrrdTools extends DrawToolCore {
       this.gui_states,
       this.protectedData,
       this.drawingPrameters,
-      this.setSyncsliceNum,
-      this.setIsDrawFalse,
-      this.flipDisplayImageByAxis,
-      this.setEmptyCanvasSize,
-      this.filterDrawedImage
+      this.setSyncsliceNum.bind(this),
+      this.setIsDrawFalse.bind(this),
+      this.flipDisplayImageByAxis.bind(this),
+      this.setEmptyCanvasSize.bind(this),
+      this.getCachedSliceImageData.bind(this)
     );
 
     // Inject EventRouter into DragOperator for centralized event handling
@@ -155,8 +152,8 @@ export class NrrdTools extends DrawToolCore {
       storeImageToLayer: this.storeImageToLayer,
       getRestLayer: this.getRestLayer,
       setIsDrawFalse: this.setIsDrawFalse,
-      initPaintImages: this.initPaintImages,
-      createEmptyPaintImage: this.createEmptyPaintImage,
+      // initPaintImages: this.initPaintImages,
+      // createEmptyPaintImage: this.createEmptyPaintImage,
     };
     this.guiParameterSettings = setupGui(guiOptions);
   }
@@ -217,6 +214,16 @@ export class NrrdTools extends DrawToolCore {
     this.nrrd_states.ratios.z = randomSlice.x.volume.spacing[2];
     this.nrrd_states.dimensions = randomSlice.x.volume.dimensions;
 
+    // Phase 2 Day 9: Re-initialize MaskVolume with real NRRD dimensions.
+    // This replaces the 1×1×1 placeholders from CommToolsData constructor
+    // and "turns on" all Day 7/8 volume read/write paths.
+    const [vw, vh, vd] = this.nrrd_states.dimensions;
+    this.protectedData.maskData.volumes = {
+      layer1: new MaskVolume(vw, vh, vd, 4),
+      layer2: new MaskVolume(vw, vh, vd, 4),
+      layer3: new MaskVolume(vw, vh, vd, 4),
+    };
+
     this.nrrd_states.spaceOrigin = (
       randomSlice.x.volume.header.space_origin as number[]
     ).map((item) => {
@@ -242,8 +249,8 @@ export class NrrdTools extends DrawToolCore {
       this.nrrd_states.ratios.z
     );
 
-    // init paintImages array
-    this.initPaintImages(this.nrrd_states.dimensions);
+    // Phase 3: initPaintImages removed (MaskVolume initialized separately)
+    // this.initPaintImages(this.nrrd_states.dimensions);
 
     // init displayslices array, the axis default is "z"
     this.setDisplaySlicesBaseOnAxis();
@@ -347,7 +354,7 @@ export class NrrdTools extends DrawToolCore {
   }
   getMaskData(): IMaskData {
     console.log("getMaskData:", this.protectedData.maskData);
-    
+
     return this.protectedData.maskData;
   }
 
@@ -392,65 +399,65 @@ export class NrrdTools extends DrawToolCore {
    * @param dimensions
    */
 
-  private initPaintImages(dimensions: Array<number>) {
-    this.createEmptyPaintImage(
-      dimensions,
-      this.protectedData.maskData.paintImages
-    );
-    this.createEmptyPaintImage(
-      dimensions,
-      this.protectedData.maskData.paintImagesLayer1
-    );
-    this.createEmptyPaintImage(
-      dimensions,
-      this.protectedData.maskData.paintImagesLayer2
-    );
-    this.createEmptyPaintImage(
-      dimensions,
-      this.protectedData.maskData.paintImagesLayer3
-    );
-  }
+  // private initPaintImages(dimensions: Array<number>) {
+  //   this.createEmptyPaintImage(
+  //     dimensions,
+  //     this.protectedData.maskData.paintImages
+  //   );
+  //   this.createEmptyPaintImage(
+  //     dimensions,
+  //     this.protectedData.maskData.paintImagesLayer1
+  //   );
+  //   this.createEmptyPaintImage(
+  //     dimensions,
+  //     this.protectedData.maskData.paintImagesLayer2
+  //   );
+  //   this.createEmptyPaintImage(
+  //     dimensions,
+  //     this.protectedData.maskData.paintImagesLayer3
+  //   );
+  // }
 
-  createEmptyPaintImage(
-    dimensions: Array<number>,
-    paintImages: IPaintImages
-  ) {
-    for (let i = 0; i < dimensions[0]; i++) {
-      const markImage_x = this.protectedData.ctxes.emptyCtx.createImageData(
-        this.nrrd_states.nrrd_z_pixel,
-        this.nrrd_states.nrrd_y_pixel
-      );
-      const initMark_x: IPaintImage = {
-        index: i,
-        image: markImage_x,
-      };
-      paintImages.x.push(initMark_x);
-    }
-    // for y slices' marks
-    for (let i = 0; i < dimensions[1]; i++) {
-      const markImage_y = this.protectedData.ctxes.emptyCtx.createImageData(
-        this.nrrd_states.nrrd_x_pixel,
-        this.nrrd_states.nrrd_z_pixel
-      );
-      const initMark_y: IPaintImage = {
-        index: i,
-        image: markImage_y,
-      };
-      paintImages.y.push(initMark_y);
-    }
-    // for z slices' marks
-    for (let i = 0; i < dimensions[2]; i++) {
-      const markImage_z = this.protectedData.ctxes.emptyCtx.createImageData(
-        this.nrrd_states.nrrd_x_pixel,
-        this.nrrd_states.nrrd_y_pixel
-      );
-      const initMark_z: IPaintImage = {
-        index: i,
-        image: markImage_z,
-      };
-      paintImages.z.push(initMark_z);
-    }
-  }
+  // createEmptyPaintImage(
+  //   dimensions: Array<number>,
+  //   paintImages: IPaintImages
+  // ) {
+  //   for (let i = 0; i < dimensions[0]; i++) {
+  //     const markImage_x = this.protectedData.ctxes.emptyCtx.createImageData(
+  //       this.nrrd_states.nrrd_z_pixel,
+  //       this.nrrd_states.nrrd_y_pixel
+  //     );
+  //     const initMark_x: IPaintImage = {
+  //       index: i,
+  //       image: markImage_x,
+  //     };
+  //     paintImages.x.push(initMark_x);
+  //   }
+  //   // for y slices' marks
+  //   for (let i = 0; i < dimensions[1]; i++) {
+  //     const markImage_y = this.protectedData.ctxes.emptyCtx.createImageData(
+  //       this.nrrd_states.nrrd_x_pixel,
+  //       this.nrrd_states.nrrd_z_pixel
+  //     );
+  //     const initMark_y: IPaintImage = {
+  //       index: i,
+  //       image: markImage_y,
+  //     };
+  //     paintImages.y.push(initMark_y);
+  //   }
+  //   // for z slices' marks
+  //   for (let i = 0; i < dimensions[2]; i++) {
+  //     const markImage_z = this.protectedData.ctxes.emptyCtx.createImageData(
+  //       this.nrrd_states.nrrd_x_pixel,
+  //       this.nrrd_states.nrrd_y_pixel
+  //     );
+  //     const initMark_z: IPaintImage = {
+  //       index: i,
+  //       image: markImage_z,
+  //     };
+  //     paintImages.z.push(initMark_z);
+  //   }
+  // }
 
   /**
    * Switch all contrast slices' orientation
@@ -633,18 +640,16 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.allSlicesArray.length = 0;
     this.protectedData.displaySlices.length = 0;
     this.undoArray.length = 0;
-    this.protectedData.maskData.paintImages.x.length = 0;
-    this.protectedData.maskData.paintImages.y.length = 0;
-    this.protectedData.maskData.paintImages.z.length = 0;
-    this.protectedData.maskData.paintImagesLayer1.x.length = 0;
-    this.protectedData.maskData.paintImagesLayer1.y.length = 0;
-    this.protectedData.maskData.paintImagesLayer1.z.length = 0;
-    this.protectedData.maskData.paintImagesLayer2.x.length = 0;
-    this.protectedData.maskData.paintImagesLayer2.y.length = 0;
-    this.protectedData.maskData.paintImagesLayer2.z.length = 0;
-    this.protectedData.maskData.paintImagesLayer3.x.length = 0;
-    this.protectedData.maskData.paintImagesLayer3.y.length = 0;
-    this.protectedData.maskData.paintImagesLayer3.z.length = 0;
+
+    // Phase 3: Reset MaskVolume storage to 1×1×1 placeholders
+    this.protectedData.maskData.volumes = {
+      layer1: new MaskVolume(1, 1, 1, 4),
+      layer2: new MaskVolume(1, 1, 1, 4),
+      layer3: new MaskVolume(1, 1, 1, 4),
+    };
+
+    // Clear slice cache
+    this.clearAllSliceCache();
 
     this.clearDictionary(this.protectedData.skipSlicesDic);
 
@@ -909,19 +914,18 @@ export class NrrdTools extends DrawToolCore {
   }
 
   clearStoreImages() {
-    this.protectedData.maskData.paintImages.x.length = 0;
-    this.protectedData.maskData.paintImages.y.length = 0;
-    this.protectedData.maskData.paintImages.z.length = 0;
-    this.protectedData.maskData.paintImagesLayer1.x.length = 0;
-    this.protectedData.maskData.paintImagesLayer1.y.length = 0;
-    this.protectedData.maskData.paintImagesLayer1.z.length = 0;
-    this.protectedData.maskData.paintImagesLayer2.x.length = 0;
-    this.protectedData.maskData.paintImagesLayer2.y.length = 0;
-    this.protectedData.maskData.paintImagesLayer2.z.length = 0;
-    this.protectedData.maskData.paintImagesLayer3.x.length = 0;
-    this.protectedData.maskData.paintImagesLayer3.y.length = 0;
-    this.protectedData.maskData.paintImagesLayer3.z.length = 0;
-    this.initPaintImages(this.nrrd_states.dimensions);
+    // Phase 3: Re-init MaskVolume with current dimensions
+    if (this.nrrd_states.dimensions.length === 3) {
+      const [w, h, d] = this.nrrd_states.dimensions;
+      this.protectedData.maskData.volumes = {
+        layer1: new MaskVolume(w, h, d, 4),
+        layer2: new MaskVolume(w, h, d, 4),
+        layer3: new MaskVolume(w, h, d, 4),
+      };
+    }
+
+    // Clear slice cache
+    this.clearAllSliceCache();
   }
 
   /**
@@ -1034,27 +1038,151 @@ export class NrrdTools extends DrawToolCore {
       this.nrrd_states.changedHeight;
 
     this.redrawDisplayCanvas();
-    this.reloadMaskToLayer(
-      this.protectedData.maskData.paintImages,
-      this.protectedData.ctxes.drawingLayerMasterCtx
-    );
-    this.reloadMaskToLayer(
-      this.protectedData.maskData.paintImagesLayer1,
+
+    // Phase 3: Reload masks from MaskVolume instead of paintImages arrays
+    this.reloadMasksFromVolume();
+  }
+
+  /**
+   * Phase 3: Reload all mask layers from MaskVolume with caching
+   * Replaces the old reloadMaskToLayer approach
+   */
+  private reloadMasksFromVolume(): void {
+    const axis = this.protectedData.axis;
+    const sliceIndex = this.nrrd_states.currentIndex;
+
+    // Save current layer
+    const originalLayer = this.gui_states.layer;
+
+    // Draw layer1 (temporarily switch to layer1 for cache key)
+    this.gui_states.layer = "layer1";
+    this.drawMaskLayerFromVolumeWithCache(
+      axis,
+      sliceIndex,
       this.protectedData.ctxes.drawingLayerOneCtx
     );
-    this.reloadMaskToLayer(
-      this.protectedData.maskData.paintImagesLayer2,
+
+    // Draw layer2
+    this.gui_states.layer = "layer2";
+    this.drawMaskLayerFromVolumeWithCache(
+      axis,
+      sliceIndex,
       this.protectedData.ctxes.drawingLayerTwoCtx
     );
-    // need to check here again: why use ctx two not three. now modify to three
-    // this.reloadMaskToLayer(this.protectedData.maskData.paintImagesLayer3, this.protectedData.ctxes.drawingLayerTwoCtx);
-    this.reloadMaskToLayer(
-      this.protectedData.maskData.paintImagesLayer3,
+
+    // Draw layer3
+    this.gui_states.layer = "layer3";
+    this.drawMaskLayerFromVolumeWithCache(
+      axis,
+      sliceIndex,
       this.protectedData.ctxes.drawingLayerThreeCtx
+    );
+
+    // Restore original layer
+    this.gui_states.layer = originalLayer;
+
+    // Composite all layers to master canvas
+    this.compositeAllLayers();
+  }
+
+  /**
+   * Draw layer mask using the slice cache for better performance
+   */
+  private drawMaskLayerFromVolumeWithCache(
+    axis: "x" | "y" | "z",
+    sliceIndex: number,
+    ctx: CanvasRenderingContext2D
+  ): void {
+    // Clear the layer canvas first
+    ctx.clearRect(0, 0, this.nrrd_states.changedWidth, this.nrrd_states.changedHeight);
+
+    // Get imageData from cache (uses CommToolsData.sliceImageCache)
+    const volume = this.getCurrentVolume();
+    if (!volume) return;
+
+    try {
+      // Check cache first
+      const cacheKey = `${this.gui_states.layer}_${axis}_${sliceIndex}`;
+      let imageData = (this as any).sliceImageCache?.get(cacheKey);
+
+      if (!imageData) {
+        // Cache miss - read from volume
+        imageData = volume.getSliceRawImageData(sliceIndex, axis);
+        // Store in cache
+        if ((this as any).sliceImageCache) {
+          (this as any).sliceImageCache.set(cacheKey, imageData);
+        }
+      }
+
+      // Quick check for non-zero pixels (only first 256 pixels)
+      const data = imageData.data;
+      let hasData = false;
+      const checkLimit = Math.min(data.length, 1024);
+      for (let i = 0; i < checkLimit; i += 4) {
+        if (data[i] !== 0 || data[i+1] !== 0 || data[i+2] !== 0 || data[i+3] !== 0) {
+          hasData = true;
+          break;
+        }
+      }
+
+      if (hasData) {
+        this.setEmptyCanvasSize();
+        this.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
+        ctx.drawImage(
+          this.protectedData.canvases.emptyCanvas,
+          0,
+          0,
+          this.nrrd_states.changedWidth,
+          this.nrrd_states.changedHeight
+        );
+      }
+    } catch (err) {
+      console.warn(`Failed to draw cached mask layer for slice ${sliceIndex}:`, err);
+    }
+  }
+
+
+  /**
+   * Composite all 3 layer canvases to the master display canvas
+   */
+  private compositeAllLayers(): void {
+    const masterCtx = this.protectedData.ctxes.drawingLayerMasterCtx;
+    const width = this.nrrd_states.changedWidth;
+    const height = this.nrrd_states.changedHeight;
+
+    // Clear master canvas
+    masterCtx.clearRect(0, 0, width, height);
+
+    // Composite layer1
+    masterCtx.drawImage(
+      this.protectedData.canvases.drawingCanvasLayerOne,
+      0,
+      0,
+      width,
+      height
+    );
+
+    // Composite layer2
+    masterCtx.drawImage(
+      this.protectedData.canvases.drawingCanvasLayerTwo,
+      0,
+      0,
+      width,
+      height
+    );
+
+    // Composite layer3
+    masterCtx.drawImage(
+      this.protectedData.canvases.drawingCanvasLayerThree,
+      0,
+      0,
+      width,
+      height
     );
   }
 
   /**
+   * @deprecated Phase 3: Legacy method - use reloadMasksFromVolume instead
    * Used to init the mask on each Layer and reload
    * @param paintImages
    * @param ctx

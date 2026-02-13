@@ -85,11 +85,11 @@ interface IConfigGUI {
   ) => ImageData;
   getRestLayer: () => ("layer1" | "layer2" | "layer3")[];
   setIsDrawFalse: (target: number) => void;
-  initPaintImages: (dimensions: Array<number>) => void;
-  createEmptyPaintImage: (
-    dimensions: Array<number>,
-    paintImages: IPaintImages
-  ) => void;
+  // initPaintImages: (dimensions: Array<number>) => void;
+  // createEmptyPaintImage: (
+  //   dimensions: Array<number>,
+  //   paintImages: IPaintImages
+  // ) => void;
 }
 
 function setupGui(configs: IConfigGUI): IGuiParameterSettings {

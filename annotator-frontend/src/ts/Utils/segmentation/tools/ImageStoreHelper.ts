@@ -6,15 +6,20 @@
  * - sliceArrayH / sliceArrayV
  * - replaceVerticalColPixels / replaceHorizontalRowPixels
  * - checkSharedPlaceSlice / replaceArray / findSliceInSharedPlace
+ *
+ * Phase 2 Day 7: Updated to write/read MaskVolume alongside legacy IPaintImages.
+ * Volume is the primary storage; IPaintImages kept for backward compatibility.
  */
 
 import { BaseTool } from "./BaseTool";
 import type { ToolContext } from "./BaseTool";
 import type { IPaintImage, IPaintImages } from "../coreTools/coreType";
+import { MaskVolume } from "../core";
 
 export interface ImageStoreCallbacks {
   setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;
   drawImageOnEmptyImage: (canvas: HTMLCanvasElement) => void;
+  clearSliceCache: (layer: string, axis: "x" | "y" | "z", sliceIndex: number) => void;
 }
 
 export class ImageStoreHelper extends BaseTool {
@@ -25,51 +30,77 @@ export class ImageStoreHelper extends BaseTool {
     this.callbacks = callbacks;
   }
 
-  // ===== Store Image To Axis =====
+  // ===== Volume Accessor Helpers (Phase 2) =====
 
-  storeImageToAxis(
-    index: number,
-    paintedImages: IPaintImages,
-    imageData: ImageData,
-    axis?: "x" | "y" | "z"
-  ): void {
-    const temp: IPaintImage = { index, image: imageData };
-
-    let drawedImage: IPaintImage;
-    switch (axis ?? this.ctx.protectedData.axis) {
-      case "x":
-        drawedImage = this.filterDrawedImage("x", index, paintedImages);
-        drawedImage
-          ? (drawedImage.image = imageData)
-          : paintedImages.x?.push(temp);
-        break;
-      case "y":
-        drawedImage = this.filterDrawedImage("y", index, paintedImages);
-        drawedImage
-          ? (drawedImage.image = imageData)
-          : paintedImages.y?.push(temp);
-        break;
-      case "z":
-        drawedImage = this.filterDrawedImage("z", index, paintedImages);
-        drawedImage
-          ? (drawedImage.image = imageData)
-          : paintedImages.z?.push(temp);
-        break;
+  /**
+   * Get MaskVolume for a specific layer.
+   * Delegates to the volumes stored in protectedData.maskData.
+   *
+   * @param layer - "layer1", "layer2", or "layer3"
+   * @returns MaskVolume for the given layer, or layer1 as fallback
+   */
+  private getVolumeForLayer(layer: string): MaskVolume {
+    const { volumes } = this.ctx.protectedData.maskData;
+    switch (layer) {
+      case "layer1": return volumes.layer1;
+      case "layer2": return volumes.layer2;
+      case "layer3": return volumes.layer3;
+      default: return volumes.layer1;
     }
   }
 
+  /**
+   * Get MaskVolume for the currently active layer.
+   */
+  private getCurrentVolume(): MaskVolume {
+    return this.getVolumeForLayer(this.ctx.gui_states.layer);
+  }
+
+  // ===== Store Image To Axis =====
+
+  /**
+   * Phase 3: Simplified to be a no-op.
+   * MaskVolume storage happens in storeAllImages via setSliceFromImageData.
+   * This method kept for backward compatibility with existing call sites.
+   */
+  storeImageToAxis(
+    _index: number,
+    _paintedImages: IPaintImages,
+    _imageData: ImageData,
+    _axis?: "x" | "y" | "z"
+  ): void {
+    // No-op: MaskVolume is the primary storage, updated in storeAllImages
+  }
+
+  /**
+   * Retrieve the drawn image for a given axis and slice.
+   *
+   * Phase 3: Reads exclusively from MaskVolume (no legacy fallback).
+   */
   filterDrawedImage(
     axis: "x" | "y" | "z",
     sliceIndex: number,
-    paintedImages: IPaintImages
-  ): IPaintImage {
-    return paintedImages[axis].filter((item: IPaintImage) => {
-      return item.index === sliceIndex;
-    })[0];
+    _paintedImages: IPaintImages
+  ): IPaintImage | undefined {
+    try {
+      const volume = this.getCurrentVolume();
+      if (volume) {
+        const imageData = volume.getSliceRawImageData(sliceIndex, axis);
+        return { index: sliceIndex, image: imageData };
+      }
+    } catch (err) {
+      console.warn(`filterDrawedImage: Failed to read slice ${sliceIndex} on ${axis}:`, err);
+    }
+    return undefined;
   }
 
   // ===== Store All Images (cross-axis sync) =====
 
+  /**
+   * Store all layer images for the current slice (cross-axis sync).
+   *
+   * Phase 2: Also writes into the current layer's MaskVolume.
+   */
   storeAllImages(index: number, layer: string): void {
     const nrrd = this.ctx.nrrd_states;
 
@@ -87,85 +118,50 @@ export class ImageStoreHelper extends BaseTool {
       this.ctx.protectedData.canvases.emptyCanvas.height
     );
 
-    switch (this.ctx.protectedData.axis) {
-      case "x":
-        this.syncAxisX(index, imageData);
-        break;
-      case "y":
-        this.syncAxisY(index, imageData);
-        break;
-      case "z":
-        this.syncAxisZ(index, imageData);
-        break;
+    // Phase 2: Write into MaskVolume (primary storage)
+    try {
+      const volume = this.getVolumeForLayer(layer);
+      if (volume) {
+        volume.setSliceFromImageData(
+          index,
+          imageData,
+          this.ctx.protectedData.axis
+        );
+
+        // Clear cache for this slice since it's been modified
+        this.callbacks.clearSliceCache(layer, this.ctx.protectedData.axis, index);
+      }
+    } catch (err) {
+      // Volume not ready — continue with legacy path only
     }
 
-    this.storeImageToAxis(
-      index,
-      this.ctx.protectedData.maskData.paintImages,
-      imageData
-    );
+    // Phase 3: Cross-axis sync now handled by MaskVolume's 3D storage
+    // No need to manually sync paintImages arrays
+
     if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
-      this.storeEachLayerImage(index, layer);
+      // Notify parent component (legacy callback)
+      this.ctx.nrrd_states.getMask(
+        imageData,
+        this.ctx.nrrd_states.currentIndex,
+        layer,
+        this.ctx.nrrd_states.nrrd_x_pixel,
+        this.ctx.nrrd_states.nrrd_y_pixel,
+        this.ctx.nrrd_states.clearAllFlag
+      );
     }
   }
 
-  private syncAxisX(index: number, imageData: ImageData): void {
-    const nrrd = this.ctx.nrrd_states;
-    const maskData = this.checkSharedPlaceSlice(nrrd.nrrd_x_pixel, nrrd.nrrd_y_pixel, imageData);
-
-    const marked_a = this.sliceArrayV(maskData, nrrd.nrrd_y_pixel, nrrd.nrrd_z_pixel);
-    const marked_b = this.sliceArrayH(maskData, nrrd.nrrd_y_pixel, nrrd.nrrd_z_pixel);
-
-    this.replaceVerticalColPixels(
-      this.ctx.protectedData.maskData.paintImages.z,
-      nrrd.dimensions[2], 1, marked_a, nrrd.nrrd_x_pixel, index
-    );
-    this.replaceVerticalColPixels(
-      this.ctx.protectedData.maskData.paintImages.y,
-      nrrd.dimensions[1], 1, marked_b, nrrd.nrrd_x_pixel, index
-    );
-  }
-
-  private syncAxisY(index: number, imageData: ImageData): void {
-    const nrrd = this.ctx.nrrd_states;
-    const maskData = this.checkSharedPlaceSlice(nrrd.nrrd_x_pixel, nrrd.nrrd_y_pixel, imageData);
-
-    const marked_a = this.sliceArrayV(maskData, nrrd.nrrd_z_pixel, nrrd.nrrd_x_pixel);
-    const marked_b = this.sliceArrayH(maskData, nrrd.nrrd_z_pixel, nrrd.nrrd_x_pixel);
-
-    this.replaceHorizontalRowPixels(
-      this.ctx.protectedData.maskData.paintImages.x,
-      nrrd.dimensions[0], 1, marked_a, nrrd.nrrd_z_pixel, index
-    );
-    this.replaceHorizontalRowPixels(
-      this.ctx.protectedData.maskData.paintImages.z,
-      nrrd.dimensions[2], 1, marked_b, nrrd.nrrd_x_pixel, index
-    );
-  }
-
-  private syncAxisZ(index: number, imageData: ImageData): void {
-    const nrrd = this.ctx.nrrd_states;
-    const maskData = this.checkSharedPlaceSlice(nrrd.nrrd_x_pixel, nrrd.nrrd_y_pixel, imageData);
-
-    const marked_a = this.sliceArrayV(maskData, nrrd.nrrd_y_pixel, nrrd.nrrd_x_pixel);
-    const marked_b = this.sliceArrayH(maskData, nrrd.nrrd_y_pixel, nrrd.nrrd_x_pixel);
-
-    this.replaceVerticalColPixels(
-      this.ctx.protectedData.maskData.paintImages.x,
-      nrrd.dimensions[0], 1, marked_a, nrrd.nrrd_z_pixel, index
-    );
-    this.replaceHorizontalRowPixels(
-      this.ctx.protectedData.maskData.paintImages.y,
-      nrrd.dimensions[1], 1, marked_b, nrrd.nrrd_x_pixel, index
-    );
-  }
 
   // ===== Store Per-Layer Images =====
 
+  /**
+   * Phase 3: Simplified - extracts ImageData from canvas but no longer stores to paintImages.
+   * Kept for backward compatibility with existing call sites.
+   */
   storeImageToLayer(
-    index: number,
+    _index: number,
     canvas: HTMLCanvasElement,
-    paintedImages: IPaintImages
+    _paintedImages: IPaintImages
   ): ImageData {
     if (!this.ctx.nrrd_states.loadMaskJson) {
       this.callbacks.setEmptyCanvasSize();
@@ -177,49 +173,10 @@ export class ImageStoreHelper extends BaseTool {
       this.ctx.protectedData.canvases.emptyCanvas.width,
       this.ctx.protectedData.canvases.emptyCanvas.height
     );
-    this.storeImageToAxis(index, paintedImages, imageData);
+    // No longer stores to paintedImages - MaskVolume is primary storage
     return imageData;
   }
 
-  storeEachLayerImage(index: number, layer: string): void {
-    if (!this.ctx.nrrd_states.loadMaskJson) {
-      this.callbacks.setEmptyCanvasSize();
-    }
-    let imageData: ImageData | undefined;
-    switch (layer) {
-      case "layer1":
-        imageData = this.storeImageToLayer(
-          index,
-          this.ctx.protectedData.canvases.drawingCanvasLayerOne,
-          this.ctx.protectedData.maskData.paintImagesLayer1
-        );
-        break;
-      case "layer2":
-        imageData = this.storeImageToLayer(
-          index,
-          this.ctx.protectedData.canvases.drawingCanvasLayerTwo,
-          this.ctx.protectedData.maskData.paintImagesLayer2
-        );
-        break;
-      case "layer3":
-        imageData = this.storeImageToLayer(
-          index,
-          this.ctx.protectedData.canvases.drawingCanvasLayerThree,
-          this.ctx.protectedData.maskData.paintImagesLayer3
-        );
-        break;
-    }
-    if (!this.ctx.nrrd_states.loadMaskJson && this.ctx.protectedData.axis == "z") {
-      this.ctx.nrrd_states.getMask(
-        imageData as ImageData,
-        this.ctx.nrrd_states.currentIndex,
-        layer,
-        this.ctx.nrrd_states.nrrd_x_pixel,
-        this.ctx.nrrd_states.nrrd_y_pixel,
-        this.ctx.nrrd_states.clearAllFlag
-      );
-    }
-  }
 
   // ===== Array Slicing =====
 
@@ -344,44 +301,72 @@ export class ImageStoreHelper extends BaseTool {
     }
   }
 
+  /**
+   * Phase 3: Updated to read from MaskVolume instead of paintImages.
+   */
   findSliceInSharedPlace(): ImageData[] {
     const sharedPlaceImages: ImageData[] = [];
     const base = Math.floor(
       this.ctx.nrrd_states.currentIndex *
         this.ctx.nrrd_states.ratios[this.ctx.protectedData.axis]
     );
+    const volume = this.getCurrentVolume();
+    const axis = this.ctx.protectedData.axis;
 
+    if (!volume) {
+      return sharedPlaceImages;
+    }
+
+    // Check previous slices
     for (let i = 1; i <= 3; i++) {
       const index = this.ctx.nrrd_states.currentIndex - i;
       if (index < this.ctx.nrrd_states.minIndex) {
         break;
-      } else {
-        const newIndex = Math.floor(
-          index * this.ctx.nrrd_states.ratios[this.ctx.protectedData.axis]
-        );
-        if (newIndex === base) {
-          sharedPlaceImages.push(
-            this.ctx.protectedData.maskData.paintImages[this.ctx.protectedData.axis][index].image
-          );
+      }
+      const newIndex = Math.floor(
+        index * this.ctx.nrrd_states.ratios[axis]
+      );
+      if (newIndex === base) {
+        try {
+          const imageData = volume.getSliceRawImageData(index, axis);
+          sharedPlaceImages.push(imageData);
+        } catch {
+          // Slice out of bounds - skip
         }
       }
     }
 
+    // Check next slices
     for (let i = 1; i <= 3; i++) {
       const index = this.ctx.nrrd_states.currentIndex + i;
       if (index > this.ctx.nrrd_states.maxIndex) {
         break;
-      } else {
-        const newIndex = Math.floor(
-          index * this.ctx.nrrd_states.ratios[this.ctx.protectedData.axis]
-        );
-        if (newIndex === base) {
-          sharedPlaceImages.push(
-            this.ctx.protectedData.maskData.paintImages[this.ctx.protectedData.axis][index].image
-          );
+      }
+      const newIndex = Math.floor(
+        index * this.ctx.nrrd_states.ratios[axis]
+      );
+      if (newIndex === base) {
+        try {
+          const imageData = volume.getSliceRawImageData(index, axis);
+          sharedPlaceImages.push(imageData);
+        } catch {
+          // Slice out of bounds - skip
         }
       }
     }
+
     return sharedPlaceImages;
+  }
+
+  // ===== Helper Methods =====
+
+  private hasNonZeroPixels(imageData: ImageData): boolean {
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] !== 0 || data[i+1] !== 0 || data[i+2] !== 0 || data[i+3] !== 0) {
+        return true;
+      }
+    }
+    return false;
   }
 }

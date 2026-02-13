@@ -9,6 +9,7 @@ export default defineConfig({
         globals: true,
         include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
         exclude: ['node_modules', 'dist'],
+        setupFiles: ['src/ts/Utils/segmentation/core/__tests__/setup.ts'],
     },
     resolve: {
         alias: {

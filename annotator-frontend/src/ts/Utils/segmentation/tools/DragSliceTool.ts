@@ -11,18 +11,13 @@
 
 import { BaseTool } from "./BaseTool";
 import type { ToolContext } from "./BaseTool";
-import type { IPaintImage, IPaintImages } from "../coreTools/coreType";
 
 export interface DragSliceCallbacks {
   setSyncsliceNum: () => void;
   setIsDrawFalse: (target: number) => void;
   flipDisplayImageByAxis: () => void;
   setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;
-  filterDrawedImage: (
-    axis: "x" | "y" | "z",
-    sliceIndex: number,
-    paintedImages: IPaintImages
-  ) => IPaintImage;
+  getCachedSliceImageData: (layer: string, axis: "x" | "y" | "z", sliceIndex: number) => ImageData | null;
 }
 
 interface IDragEffectCanvases {
@@ -132,6 +127,7 @@ export class DragSliceTool extends BaseTool {
   private drawDragSlice(canvas: any): void {
     const nrrd = this.ctx.nrrd_states;
 
+    // Draw base image (CT/MRI scan)
     this.ctx.protectedData.ctxes.displayCtx.save();
     this.callbacks.flipDisplayImageByAxis();
     this.ctx.protectedData.ctxes.displayCtx.drawImage(
@@ -143,54 +139,135 @@ export class DragSliceTool extends BaseTool {
     );
     this.ctx.protectedData.ctxes.displayCtx.restore();
 
-    if (
-      this.ctx.protectedData.maskData.paintImages.x.length > 0 ||
-      this.ctx.protectedData.maskData.paintImages.y.length > 0 ||
-      this.ctx.protectedData.maskData.paintImages.z.length > 0
-    ) {
-      if (nrrd.switchSliceFlag) {
-        this.drawMaskToLayerCtx(
-          this.ctx.protectedData.maskData.paintImages,
-          this.ctx.protectedData.ctxes.drawingLayerMasterCtx
-        );
-        this.drawMaskToLayerCtx(
-          this.ctx.protectedData.maskData.paintImagesLayer1,
-          this.ctx.protectedData.ctxes.drawingLayerOneCtx
-        );
-        this.drawMaskToLayerCtx(
-          this.ctx.protectedData.maskData.paintImagesLayer2,
-          this.ctx.protectedData.ctxes.drawingLayerTwoCtx
-        );
-        this.drawMaskToLayerCtx(
-          this.ctx.protectedData.maskData.paintImagesLayer3,
-          this.ctx.protectedData.ctxes.drawingLayerThreeCtx
-        );
-        nrrd.switchSliceFlag = false;
-      }
+    // Phase 3: Draw ALL 3 layers from MaskVolume (multi-layer compositing)
+    if (nrrd.switchSliceFlag) {
+      const { volumes } = this.ctx.protectedData.maskData;
+      const axis = this.ctx.protectedData.axis;
+      const sliceIndex = nrrd.currentIndex;
+
+      // Draw layer1 (to drawingLayerOneCtx)
+      this.drawMaskLayerFromVolume(
+        volumes.layer1,
+        axis,
+        sliceIndex,
+        this.ctx.protectedData.ctxes.drawingLayerOneCtx
+      );
+
+      // Draw layer2 (to drawingLayerTwoCtx)
+      this.drawMaskLayerFromVolume(
+        volumes.layer2,
+        axis,
+        sliceIndex,
+        this.ctx.protectedData.ctxes.drawingLayerTwoCtx
+      );
+
+      // Draw layer3 (to drawingLayerThreeCtx)
+      this.drawMaskLayerFromVolume(
+        volumes.layer3,
+        axis,
+        sliceIndex,
+        this.ctx.protectedData.ctxes.drawingLayerThreeCtx
+      );
+
+      // Composite all layers to master canvas
+      this.compositeAllLayers();
+
+      nrrd.switchSliceFlag = false;
     }
   }
 
-  private drawMaskToLayerCtx(
-    paintedImages: IPaintImages,
+  /**
+   * Draw a single layer's mask from MaskVolume to its canvas context
+   *
+   * Phase 3: Uses cached ImageData for better performance
+   */
+  private drawMaskLayerFromVolume(
+    volume: any,
+    axis: "x" | "y" | "z",
+    sliceIndex: number,
     ctx: CanvasRenderingContext2D
   ): void {
-    const paintedImage = this.callbacks.filterDrawedImage(
-      this.ctx.protectedData.axis,
-      this.ctx.nrrd_states.currentIndex,
-      paintedImages
+    try {
+      // Determine which layer this volume belongs to
+      const { volumes } = this.ctx.protectedData.maskData;
+      let layerName = "layer1";
+      if (volume === volumes.layer2) layerName = "layer2";
+      else if (volume === volumes.layer3) layerName = "layer3";
+
+      // Get cached slice data (much faster!)
+      const imageData = this.callbacks.getCachedSliceImageData(layerName, axis, sliceIndex);
+
+      if (!imageData) return;
+
+      // Quick check for non-zero pixels (only first 256 pixels for speed)
+      if (this.hasNonZeroPixels(imageData)) {
+        this.callbacks.setEmptyCanvasSize();
+        this.ctx.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
+        ctx.drawImage(
+          this.ctx.protectedData.canvases.emptyCanvas,
+          0,
+          0,
+          this.ctx.nrrd_states.changedWidth,
+          this.ctx.nrrd_states.changedHeight
+        );
+      }
+    } catch (err) {
+      // Slice out of bounds or volume not ready - skip silently
+      console.warn(`Failed to draw mask layer for slice ${sliceIndex}:`, err);
+    }
+  }
+
+  /**
+   * Composite all 3 layer canvases to the master display canvas
+   *
+   * This ensures all layers are visible simultaneously (fixes multi-layer display bug)
+   */
+  private compositeAllLayers(): void {
+    const masterCtx = this.ctx.protectedData.ctxes.drawingLayerMasterCtx;
+    const width = this.ctx.nrrd_states.changedWidth;
+    const height = this.ctx.nrrd_states.changedHeight;
+
+    // Clear master canvas
+    masterCtx.clearRect(0, 0, width, height);
+
+    // Composite layer1
+    masterCtx.drawImage(
+      this.ctx.protectedData.canvases.drawingCanvasLayerOne,
+      0,
+      0,
+      width,
+      height
     );
 
-    if (paintedImage?.image) {
-      this.callbacks.setEmptyCanvasSize();
-      this.ctx.protectedData.ctxes.emptyCtx.putImageData(paintedImage.image, 0, 0);
-      ctx.drawImage(
-        this.ctx.protectedData.canvases.emptyCanvas,
-        0,
-        0,
-        this.ctx.nrrd_states.changedWidth,
-        this.ctx.nrrd_states.changedHeight
-      );
+    // Composite layer2
+    masterCtx.drawImage(
+      this.ctx.protectedData.canvases.drawingCanvasLayerTwo,
+      0,
+      0,
+      width,
+      height
+    );
+
+    // Composite layer3
+    masterCtx.drawImage(
+      this.ctx.protectedData.canvases.drawingCanvasLayerThree,
+      0,
+      0,
+      width,
+      height
+    );
+  }
+
+  private hasNonZeroPixels(imageData: ImageData): boolean {
+    const data = imageData.data;
+    // Quick check: only scan first 256 pixels for performance
+    const limit = Math.min(256 * 4, data.length);
+    for (let i = 0; i < limit; i += 4) {
+      if (data[i] !== 0 || data[i+1] !== 0 || data[i+2] !== 0 || data[i+3] !== 0) {
+        return true;
+      }
     }
+    return false;
   }
 
   // ===== Canvas Cleanup =====

@@ -76,12 +76,33 @@ interface IStoredPaintImages {
   layer2: IPaintImages;
   layer3: IPaintImages;
 }
+
+// ── New Volumetric Storage (Phase 2) ──────────────────────────────────────
+
+/**
+ * Import MaskVolume from core module
+ * (imported where needed, not here to avoid circular deps)
+ */
+type MaskVolume = any; // Placeholder — use real import in CommToolsData
+
+/**
+ * New mask data structure using MaskVolume for true 3D storage
+ */
+interface INewMaskData {
+  layer1: MaskVolume;
+  layer2: MaskVolume;
+  layer3: MaskVolume;
+}
+
+/**
+ * Mask data storage using volumetric MaskVolume (Phase 3)
+ *
+ * Phase 2 legacy ImageData storage has been removed.
+ * All mask data now stored in 3D volumes for memory efficiency.
+ */
 type IMaskData = {
-  paintImagesLayer1: IPaintImages;
-  paintImagesLayer2: IPaintImages;
-  paintImagesLayer3: IPaintImages;
-  // used to store display marks data with multiple layers
-  paintImages: IPaintImages;
+  // Volumetric storage (only storage mechanism)
+  volumes: INewMaskData;
 };
 
 interface IProtected {
@@ -402,6 +423,7 @@ export {
   IStoredPaintImages,
   ISkipSlicesDictType,
   IMaskData,
+  INewMaskData,
   IUndoType,
   ICursorPage,
   IGuiParameterSettings
