@@ -479,13 +479,11 @@ export class CommToolsData {
    *
    * @param axis "x" | "y" | "z"
    * @param sliceIndex number
-   * @param paintedImages IPaintImages (unused, kept for API compatibility)
    * @returns IPaintImage with the mask for the given slice, or undefined if not found
    */
   filterDrawedImage(
     axis: "x" | "y" | "z",
-    sliceIndex: number,
-    paintedImages: IPaintImages
+    sliceIndex: number
   ): IPaintImage | undefined {
     try {
       const volume = this.getCurrentVolume();

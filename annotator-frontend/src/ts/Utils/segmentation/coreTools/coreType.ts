@@ -71,12 +71,6 @@ interface IPaintImage {
   index: number;
   image: ImageData;
 }
-interface IStoredPaintImages {
-  layer1: IPaintImages;
-  layer2: IPaintImages;
-  layer3: IPaintImages;
-}
-
 // ── New Volumetric Storage (Phase 2) ──────────────────────────────────────
 
 /**
@@ -427,7 +421,6 @@ export {
   INrrdStates,
   IPaintImage,
   IPaintImages,
-  IStoredPaintImages,
   ISkipSlicesDictType,
   IMaskData,
   INewMaskData,

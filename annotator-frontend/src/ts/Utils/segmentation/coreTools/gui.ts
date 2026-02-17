@@ -35,16 +35,11 @@ interface IConfigGUI {
   setSyncsliceNum: () => void;
   resetLayerCanvas: () => void;
   redrawDisplayCanvas: () => void;
-  reloadMaskToLayer: (
-    paintImages: IPaintImages,
-    ctx: CanvasRenderingContext2D
-  ) => void;
   flipDisplayImageByAxis: () => void;
   filterDrawedImage: (
     axis: "x" | "y" | "z",
-    sliceIndex: number,
-    paintedImages: IPaintImages
-  ) => IPaintImage;
+    sliceIndex: number
+  ) => IPaintImage | undefined;
   setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;
   storeAllImages: (index: number, layer: string) => void;
   drawImageOnEmptyImage: (canvas: HTMLCanvasElement) => void;
@@ -86,11 +81,6 @@ interface IConfigGUI {
   ) => ImageData;
   getRestLayer: () => ("layer1" | "layer2" | "layer3")[];
   setIsDrawFalse: (target: number) => void;
-  // initPaintImages: (dimensions: Array<number>) => void;
-  // createEmptyPaintImage: (
-  //   dimensions: Array<number>,
-  //   paintImages: IPaintImages
-  // ) => void;
 }
 
 function setupGui(configs: IConfigGUI): IGuiParameterSettings {
@@ -195,9 +185,6 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
     .max(8)
     .onFinishChange((factor) => {
       configs.setMainAreaSize(factor);
-      // configs.resetPaintAreaUIPosition();
-      // configs.nrrd_states.sizeFoctor = factor;
-      // configs.resizePaintArea(factor);
     });
 
   advanceFolder
@@ -221,12 +208,10 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
     .name("FillColor");
   const bushFolder = advanceFolder.addFolder("BrushSettings");
   bushFolder.addColor(configs.gui_states, "brushColor").name("BrushColor");
-  // modeFolder.add(stateMode, "EraserSize").min(1).max(50).step(1);
   const maskFolder = advanceFolder.addFolder("MaskDownload");
   maskFolder
     .add(configs.gui_states, "downloadCurrentMask")
     .name("DownloadCurrentMask");
-  // maskFolder.add(configs.gui_states, "exportMarks").name("ExportMask");
 
   const contrastFolder = advanceFolder.addFolder("ContrastAdvanceSettings");
   contrastFolder

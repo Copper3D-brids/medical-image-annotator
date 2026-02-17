@@ -11,7 +11,6 @@ import { autoFocusDiv } from "./coreTools/divControlTools";
 import {
   IPaintImage,
   IPaintImages,
-  IStoredPaintImages,
   ISkipSlicesDictType,
   IMaskData,
   IDragOpts,
@@ -27,8 +26,6 @@ export class NrrdTools extends DrawToolCore {
 
   // A base conatainer to append displayCanvas and drawingCanvas
   dragOperator: DragOperator;
-  storedPaintImages: IStoredPaintImages | undefined;
-
   private paintedImage: IPaintImage | undefined;
 
   private initState: boolean = true;
@@ -40,8 +37,6 @@ export class NrrdTools extends DrawToolCore {
   constructor(container: HTMLDivElement) {
     super(container);
     this.container = container;
-
-    // Phase 3: storedPaintImages removed (legacy ImageData storage no longer used)
 
     this.protectedData.previousDrawingImage =
       this.protectedData.ctxes.emptyCtx.createImageData(1, 1);
@@ -73,14 +68,6 @@ export class NrrdTools extends DrawToolCore {
   drag(opts?: IDragOpts) {
     this.dragOperator.drag(opts);
   }
-  // draw(opts?: IDrawOpts) {
-  //   this.drawOperator.draw(opts);
-  // }
-  // start() {
-  //   console.log(this.drawOperator.start);
-
-  //   return this.drawOperator.start;
-  // }
 
   /**
    * Set the Draw Display Canvas base size
@@ -138,7 +125,6 @@ export class NrrdTools extends DrawToolCore {
       setSyncsliceNum: this.setSyncsliceNum,
       resetLayerCanvas: this.resetLayerCanvas,
       redrawDisplayCanvas: this.redrawDisplayCanvas,
-      reloadMaskToLayer: this.reloadMaskToLayer,
       flipDisplayImageByAxis: this.flipDisplayImageByAxis,
       filterDrawedImage: this.filterDrawedImage,
       setEmptyCanvasSize: this.setEmptyCanvasSize,
@@ -156,8 +142,6 @@ export class NrrdTools extends DrawToolCore {
       storeImageToLayer: this.storeImageToLayer,
       getRestLayer: this.getRestLayer,
       setIsDrawFalse: this.setIsDrawFalse,
-      // initPaintImages: this.initPaintImages,
-      // createEmptyPaintImage: this.createEmptyPaintImage,
     };
     this.guiParameterSettings = setupGui(guiOptions);
   }
@@ -298,6 +282,11 @@ export class NrrdTools extends DrawToolCore {
     this.nrrd_states.nrrd_y_pixel = randomSlice.x.volume.dimensions[1];
     this.nrrd_states.nrrd_z_pixel = randomSlice.x.volume.dimensions[2];
 
+    console.log(this.nrrd_states.nrrd_x_mm, this.nrrd_states.nrrd_y_mm, this.nrrd_states.nrrd_z_mm);
+    console.log(this.nrrd_states.nrrd_x_pixel, this.nrrd_states.nrrd_y_pixel, this.nrrd_states.nrrd_z_pixel);
+
+
+
     this.nrrd_states.voxelSpacing = randomSlice.x.volume.spacing;
     this.nrrd_states.ratios.x = randomSlice.x.volume.spacing[0];
     this.nrrd_states.ratios.y = randomSlice.x.volume.spacing[1];
@@ -370,8 +359,6 @@ export class NrrdTools extends DrawToolCore {
     masksData: storeExportPaintImageType,
     loadingBar?: loadingBarType
   ) {
-    console.log("setMask data", masksData);
-
     if (!!masksData) {
       this.nrrd_states.loadMaskJson = true;
       if (loadingBar) {
@@ -447,8 +434,6 @@ export class NrrdTools extends DrawToolCore {
     return this.nrrd_states.spaceOrigin;
   }
   getMaskData(): IMaskData {
-    console.log("getMaskData:", this.protectedData.maskData);
-
     return this.protectedData.maskData;
   }
 
@@ -489,77 +474,11 @@ export class NrrdTools extends DrawToolCore {
   }
 
   /**
-   * init all painted images for store images
-   * @param dimensions
-   */
-
-  // private initPaintImages(dimensions: Array<number>) {
-  //   this.createEmptyPaintImage(
-  //     dimensions,
-  //     this.protectedData.maskData.paintImages
-  //   );
-  //   this.createEmptyPaintImage(
-  //     dimensions,
-  //     this.protectedData.maskData.paintImagesLayer1
-  //   );
-  //   this.createEmptyPaintImage(
-  //     dimensions,
-  //     this.protectedData.maskData.paintImagesLayer2
-  //   );
-  //   this.createEmptyPaintImage(
-  //     dimensions,
-  //     this.protectedData.maskData.paintImagesLayer3
-  //   );
-  // }
-
-  // createEmptyPaintImage(
-  //   dimensions: Array<number>,
-  //   paintImages: IPaintImages
-  // ) {
-  //   for (let i = 0; i < dimensions[0]; i++) {
-  //     const markImage_x = this.protectedData.ctxes.emptyCtx.createImageData(
-  //       this.nrrd_states.nrrd_z_pixel,
-  //       this.nrrd_states.nrrd_y_pixel
-  //     );
-  //     const initMark_x: IPaintImage = {
-  //       index: i,
-  //       image: markImage_x,
-  //     };
-  //     paintImages.x.push(initMark_x);
-  //   }
-  //   // for y slices' marks
-  //   for (let i = 0; i < dimensions[1]; i++) {
-  //     const markImage_y = this.protectedData.ctxes.emptyCtx.createImageData(
-  //       this.nrrd_states.nrrd_x_pixel,
-  //       this.nrrd_states.nrrd_z_pixel
-  //     );
-  //     const initMark_y: IPaintImage = {
-  //       index: i,
-  //       image: markImage_y,
-  //     };
-  //     paintImages.y.push(initMark_y);
-  //   }
-  //   // for z slices' marks
-  //   for (let i = 0; i < dimensions[2]; i++) {
-  //     const markImage_z = this.protectedData.ctxes.emptyCtx.createImageData(
-  //       this.nrrd_states.nrrd_x_pixel,
-  //       this.nrrd_states.nrrd_y_pixel
-  //     );
-  //     const initMark_z: IPaintImage = {
-  //       index: i,
-  //       image: markImage_z,
-  //     };
-  //     paintImages.z.push(initMark_z);
-  //   }
-  // }
-
-  /**
    * Switch all contrast slices' orientation
    * @param {string} aixs:"x" | "y" | "z"
    *  */
   setSliceOrientation(axisTo: "x" | "y" | "z") {
     let convetObj;
-    console.log("switch to axis:", axisTo);
     if (this.nrrd_states.enableCursorChoose || this.gui_states.sphere) {
       if (this.protectedData.axis === "z") {
         this.cursorPage.z.index = this.nrrd_states.currentIndex;
@@ -915,14 +834,16 @@ export class NrrdTools extends DrawToolCore {
     this.updateMaxIndex();
     // reset origin canvas and the nrrd_states origin Width/height
     // reset the current index
+    // (also calls resizePaintArea → reloads masks, resizes canvases)
     this.setOriginCanvasAndPre();
     // update the show number div on top area
     this.dragOperator.updateShowNumDiv(this.nrrd_states.contrastNum);
     // repaint all contrast images
     this.repraintCurrentContrastSlice();
-    // resize the draw/drawOutLayer/display canvas size
-    this.resizePaintArea(this.nrrd_states.sizeFoctor);
-    this.resetPaintAreaUIPosition();
+    // Refresh display after contrast repaint (no need for full resizePaintArea
+    // since canvases were already resized in setOriginCanvasAndPre above)
+    this.redrawDisplayCanvas();
+    this.compositeAllLayers();
   }
 
   private setMainPreSlice() {
@@ -992,13 +913,9 @@ export class NrrdTools extends DrawToolCore {
     this.nrrd_states.originHeight =
       this.protectedData.canvases.originCanvas.height;
 
-    // In html the width and height is pixels,
-    // So the value must be int
-    // Therefore, we must use Math.floor rather than using Math.ceil
-    this.nrrd_states.changedWidth =
-      Math.floor(this.nrrd_states.originWidth * Number(this.nrrd_states.sizeFoctor));
-    this.nrrd_states.changedHeight =
-      Math.floor(this.nrrd_states.originWidth * Number(this.nrrd_states.sizeFoctor));
+    // Let resizePaintArea be the sole setter of changedWidth/changedHeight.
+    // Setting them here would defeat the sizeChanged detection in resizePaintArea,
+    // causing canvas elements to keep stale dimensions after axis switches.
     this.resizePaintArea(this.nrrd_states.sizeFoctor);
     this.resetPaintAreaUIPosition();
   }
@@ -1103,7 +1020,7 @@ export class NrrdTools extends DrawToolCore {
     const newWidth = Math.floor(this.nrrd_states.originWidth * factor);
     const newHeight = Math.floor(this.nrrd_states.originHeight * factor);
     const sizeChanged = newWidth !== this.nrrd_states.changedWidth ||
-                        newHeight !== this.nrrd_states.changedHeight;
+      newHeight !== this.nrrd_states.changedHeight;
 
     // Always clear display/drawing/origin canvases (needed for contrast updates)
     this.protectedData.canvases.originCanvas.width =
@@ -1192,69 +1109,6 @@ export class NrrdTools extends DrawToolCore {
 
 
   // compositeAllLayers() is inherited from CommToolsData
-
-  /**
-   * @deprecated Phase 3: Legacy method - use reloadMasksFromVolume instead
-   * Used to init the mask on each Layer and reload
-   * @param paintImages
-   * @param ctx
-   */
-  private reloadMaskToLayer(
-    paintImages: IPaintImages,
-    ctx: CanvasRenderingContext2D
-  ) {
-    let paintedImage;
-    switch (this.protectedData.axis) {
-      case "x":
-        if (paintImages.x.length > 0) {
-          paintedImage = this.filterDrawedImage(
-            "x",
-            this.nrrd_states.currentIndex,
-            paintImages
-          );
-        } else {
-          paintedImage = undefined;
-        }
-        break;
-      case "y":
-        if (paintImages.y.length > 0) {
-          paintedImage = this.filterDrawedImage(
-            "y",
-            this.nrrd_states.currentIndex,
-            paintImages
-          );
-        } else {
-          paintedImage = undefined;
-        }
-
-        break;
-      case "z":
-        if (paintImages.z.length > 0) {
-          paintedImage = this.filterDrawedImage(
-            "z",
-            this.nrrd_states.currentIndex,
-            paintImages
-          );
-        } else {
-          paintedImage = undefined;
-        }
-        break;
-    }
-    if (paintedImage?.image) {
-      // redraw the stored data to empty point 1
-      this.setEmptyCanvasSize();
-      this.protectedData.ctxes.emptyCtx.putImageData(paintedImage.image, 0, 0);
-      // Disable image smoothing to preserve exact RGB channel colors during scaling
-      if (ctx) ctx.imageSmoothingEnabled = false;
-      ctx?.drawImage(
-        this.protectedData.canvases.emptyCanvas,
-        0,
-        0,
-        this.nrrd_states.changedWidth,
-        this.nrrd_states.changedHeight
-      );
-    }
-  }
 
   /**
    * flip the canvas to a correct position.

@@ -377,11 +377,35 @@ export class MaskVolume {
       }
     } else {
       // Legacy: single-channel grayscale (R channel only)
+      const rowStride = width * ch;
+      let baseIndex: number;
+      let jStride: number;
+      let iStride: number;
+      switch (axis) {
+        case 'z':
+          baseIndex = sliceIndex * this.bytesPerSlice + channel;
+          jStride = rowStride;
+          iStride = ch;
+          break;
+        case 'y':
+          baseIndex = sliceIndex * rowStride + channel;
+          jStride = this.bytesPerSlice;
+          iStride = ch;
+          break;
+        case 'x':
+          baseIndex = sliceIndex * ch + channel;
+          jStride = this.bytesPerSlice;
+          iStride = rowStride;
+          break;
+      }
+
+      let px = 0;
       for (let j = 0; j < expectedH; j++) {
+        let idx = baseIndex + j * jStride;
         for (let i = 0; i < expectedW; i++) {
-          const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-          const px = (j * expectedW + i) * 4;
-          this.data[this.getIndex(vx, vy, vz, channel)] = pixels[px];
+          volData[idx] = pixels[px];
+          idx += iStride;
+          px += 4;
         }
       }
     }
@@ -570,39 +594,61 @@ export class MaskVolume {
     // become fully opaque labels, expanding the mask by ~1px).
     const ALPHA_THRESHOLD = 128;
 
+    const volData = this.data;
+
+    // Pre-compute strides to avoid per-pixel array allocation and bounds checks
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice;
+        jStride = rowStride;
+        iStride = nch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride;
+        jStride = this.bytesPerSlice;
+        iStride = nch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * nch;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
+
+    let px = 0;
     for (let j = 0; j < expectedH; j++) {
+      let idx = baseIndex + j * jStride;
       for (let i = 0; i < expectedW; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const px = (j * expectedW + i) * 4;
         const alpha = pixels[px + 3];
 
         if (alpha < ALPHA_THRESHOLD) {
           // Transparent or semi-transparent fringe
-
           if (channelVisible) {
-            // Check existing value in the volume
-            const existingLabel = this.data[this.getIndex(vx, vy, vz, 0)];
-            // If existing label belongs to a hidden channel, PRESERVE IT
+            const existingLabel = volData[idx];
             if (existingLabel !== 0 && channelVisible[existingLabel] === false) {
-              continue; // Skip overwrite, keeping the hidden channel's data
+              idx += iStride;
+              px += 4;
+              continue;
             }
           }
-
-          // Otherwise, clear it (background label)
-          this.data[this.getIndex(vx, vy, vz, 0)] = 0;
-          continue;
+          volData[idx] = 0;
+        } else {
+          // Match RGB against known channel colors
+          const r = pixels[px];
+          const g = pixels[px + 1];
+          const b = pixels[px + 2];
+          const key = (r << 16) | (g << 8) | b;
+          const matchedChannel = rgbToChannel.get(key);
+          volData[idx] = matchedChannel !== undefined ? matchedChannel : activeChannel;
         }
 
-        // Match RGB against known channel colors
-        const r = pixels[px];
-        const g = pixels[px + 1];
-        const b = pixels[px + 2];
-        const key = (r << 16) | (g << 8) | b;
-        const matchedChannel = rgbToChannel.get(key);
-
-        this.data[this.getIndex(vx, vy, vz, 0)] = matchedChannel !== undefined
-          ? matchedChannel
-          : activeChannel;
+        idx += iStride;
+        px += 4;
       }
     }
   }
@@ -657,35 +703,60 @@ export class MaskVolume {
     }
 
     const pixels = target.data;
+    const data = this.data;
+    const colorMap = this.colorMap;
 
+    // Pre-compute strides to avoid per-pixel mapSliceToVolume allocation
+    // and per-pixel getIndex bounds checking.
+    const ch = this.numChannels;
+    const rowStride = this.dims.width * ch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice;
+        jStride = rowStride;
+        iStride = ch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride;
+        jStride = this.bytesPerSlice;
+        iStride = ch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * ch;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
+
+    let px = 0;
     for (let j = 0; j < sliceHeight; j++) {
+      let idx = baseIndex + j * jStride;
       for (let i = 0; i < sliceWidth; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const label = this.data[this.getIndex(vx, vy, vz, 0)];
-        const px = (j * sliceWidth + i) * 4;
+        const label = data[idx];
 
         if (label === 0) {
           pixels[px] = 0;
           pixels[px + 1] = 0;
           pixels[px + 2] = 0;
           pixels[px + 3] = 0;
-          continue;
-        }
-
-        // Check channel visibility
-        if (channelVisible && !channelVisible[label]) {
+        } else if (channelVisible && !channelVisible[label]) {
           pixels[px] = 0;
           pixels[px + 1] = 0;
           pixels[px + 2] = 0;
           pixels[px + 3] = 0;
-          continue;
+        } else {
+          const color = colorMap[label] ?? MASK_CHANNEL_COLORS[label] ?? MASK_CHANNEL_COLORS[1];
+          pixels[px] = color.r;
+          pixels[px + 1] = color.g;
+          pixels[px + 2] = color.b;
+          pixels[px + 3] = Math.round(color.a * opacity);
         }
 
-        const color = this.colorMap[label] ?? MASK_CHANNEL_COLORS[label] ?? MASK_CHANNEL_COLORS[1];
-        pixels[px] = color.r;
-        pixels[px + 1] = color.g;
-        pixels[px + 2] = color.b;
-        pixels[px + 3] = Math.round(color.a * opacity);
+        idx += iStride;
+        px += 4;
       }
     }
   }
@@ -846,17 +917,41 @@ export class MaskVolume {
     this.validateSliceIndex(sliceIndex, axis);
 
     const [sliceW, sliceH] = this.getSliceDimensions(axis);
+    const volData = this.data;
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice;
+        jStride = rowStride;
+        iStride = nch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride;
+        jStride = this.bytesPerSlice;
+        iStride = nch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * nch;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
 
     for (let j = 0; j < sliceH; j++) {
+      let idx = baseIndex + j * jStride;
       for (let i = 0; i < sliceW; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
         if (channel !== undefined) {
-          this.data[this.getIndex(vx, vy, vz, channel)] = 0;
+          volData[idx + channel] = 0;
         } else {
-          for (let ch = 0; ch < this.numChannels; ch++) {
-            this.data[this.getIndex(vx, vy, vz, ch)] = 0;
+          for (let ch = 0; ch < nch; ch++) {
+            volData[idx + ch] = 0;
           }
         }
+        idx += iStride;
       }
     }
   }
@@ -895,28 +990,6 @@ export class MaskVolume {
     }
   }
 
-  /**
-   * Map 2D slice coordinates (i, j) to 3D volume coordinates (x, y, z).
-   *
-   * | Axis | Mapping                         |
-   * |------|---------------------------------|
-   * | `z`  | (i → x, j → y, sliceIndex → z) |
-   * | `y`  | (i → x, sliceIndex → y, j → z) |
-   * | `x`  | (sliceIndex → x, i → y, j → z) |
-   */
-  private mapSliceToVolume(
-    i: number,
-    j: number,
-    sliceIndex: number,
-    axis: 'x' | 'y' | 'z',
-  ): [number, number, number] {
-    switch (axis) {
-      case 'z': return [i, j, sliceIndex];
-      case 'y': return [i, sliceIndex, j];
-      case 'x': return [sliceIndex, i, j];
-    }
-  }
-
   // ── Render modes ──────────────────────────────────────────────────
 
   /**
@@ -933,16 +1006,41 @@ export class MaskVolume {
     axis: 'x' | 'y' | 'z',
     channel: number,
   ): void {
-    for (let j = 0; j < height; j++) {
-      for (let i = 0; i < width; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const value = this.data[this.getIndex(vx, vy, vz, channel)];
-        const px = (j * width + i) * 4;
+    const data = this.data;
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice + channel;
+        jStride = rowStride;
+        iStride = nch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride + channel;
+        jStride = this.bytesPerSlice;
+        iStride = nch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * nch + channel;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
 
-        pixels[px] = value; // R
-        pixels[px + 1] = value; // G
-        pixels[px + 2] = value; // B
-        pixels[px + 3] = value > 0 ? 255 : 0; // A: binary mask
+    let px = 0;
+    for (let j = 0; j < height; j++) {
+      let idx = baseIndex + j * jStride;
+      for (let i = 0; i < width; i++) {
+        const value = data[idx];
+        pixels[px] = value;
+        pixels[px + 1] = value;
+        pixels[px + 2] = value;
+        pixels[px + 3] = value > 0 ? 255 : 0;
+        idx += iStride;
+        px += 4;
       }
     }
   }
@@ -963,13 +1061,35 @@ export class MaskVolume {
     opacity: number,
   ): void {
     const color = colorMap[channel] ?? MASK_CHANNEL_COLORS[1];
+    const data = this.data;
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice + channel;
+        jStride = rowStride;
+        iStride = nch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride + channel;
+        jStride = this.bytesPerSlice;
+        iStride = nch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * nch + channel;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
 
+    let px = 0;
     for (let j = 0; j < height; j++) {
+      let idx = baseIndex + j * jStride;
       for (let i = 0; i < width; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const value = this.data[this.getIndex(vx, vy, vz, channel)];
-        const px = (j * width + i) * 4;
-
+        const value = data[idx];
         if (value > 0) {
           const intensity = value / 255;
           pixels[px] = color.r;
@@ -979,6 +1099,8 @@ export class MaskVolume {
         } else {
           pixels[px + 3] = 0;
         }
+        idx += iStride;
+        px += 4;
       }
     }
   }
@@ -998,18 +1120,41 @@ export class MaskVolume {
     visibleChannels: boolean[],
     opacity: number,
   ): void {
-    for (let j = 0; j < height; j++) {
-      for (let i = 0; i < width; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const px = (j * width + i) * 4;
+    const data = this.data;
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice;
+        jStride = rowStride;
+        iStride = nch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride;
+        jStride = this.bytesPerSlice;
+        iStride = nch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * nch;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
 
+    let px = 0;
+    for (let j = 0; j < height; j++) {
+      let idx = baseIndex + j * jStride;
+      for (let i = 0; i < width; i++) {
         let found = false;
 
         // Iterate highest-to-lowest channel; first non-zero wins
-        for (let ch = this.numChannels - 1; ch >= 0; ch--) {
+        for (let ch = nch - 1; ch >= 0; ch--) {
           if (!visibleChannels[ch]) continue;
 
-          const value = this.data[this.getIndex(vx, vy, vz, ch)];
+          const value = data[idx + ch];
           if (value > 0) {
             const color = colorMap[ch] ?? MASK_CHANNEL_COLORS[ch] ?? MASK_CHANNEL_COLORS[1];
             const intensity = value / 255;
@@ -1025,6 +1170,9 @@ export class MaskVolume {
         if (!found) {
           pixels[px + 3] = 0;
         }
+
+        idx += iStride;
+        px += 4;
       }
     }
   }
@@ -1045,20 +1193,43 @@ export class MaskVolume {
     visibleChannels: boolean[],
     opacity: number,
   ): void {
-    for (let j = 0; j < height; j++) {
-      for (let i = 0; i < width; i++) {
-        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
-        const px = (j * width + i) * 4;
+    const data = this.data;
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    let baseIndex: number;
+    let jStride: number;
+    let iStride: number;
+    switch (axis) {
+      case 'z':
+        baseIndex = sliceIndex * this.bytesPerSlice;
+        jStride = rowStride;
+        iStride = nch;
+        break;
+      case 'y':
+        baseIndex = sliceIndex * rowStride;
+        jStride = this.bytesPerSlice;
+        iStride = nch;
+        break;
+      case 'x':
+        baseIndex = sliceIndex * nch;
+        jStride = this.bytesPerSlice;
+        iStride = rowStride;
+        break;
+    }
 
+    let px = 0;
+    for (let j = 0; j < height; j++) {
+      let idx = baseIndex + j * jStride;
+      for (let i = 0; i < width; i++) {
         let totalR = 0;
         let totalG = 0;
         let totalB = 0;
         let totalA = 0;
 
-        for (let ch = 0; ch < this.numChannels; ch++) {
+        for (let ch = 0; ch < nch; ch++) {
           if (!visibleChannels[ch]) continue;
 
-          const value = this.data[this.getIndex(vx, vy, vz, ch)];
+          const value = data[idx + ch];
           if (value > 0) {
             const color = colorMap[ch] ?? MASK_CHANNEL_COLORS[ch] ?? MASK_CHANNEL_COLORS[1];
             const intensity = value / 255;
@@ -1079,6 +1250,9 @@ export class MaskVolume {
         } else {
           pixels[px + 3] = 0;
         }
+
+        idx += iStride;
+        px += 4;
       }
     }
   }

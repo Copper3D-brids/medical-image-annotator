@@ -600,38 +600,19 @@ export class DrawToolCore extends CommToolsData {
     }
 
     const redrawPreviousImageToLayerCtx = (
-      ctx: CanvasRenderingContext2D,
-      layer: string = "default"
+      ctx: CanvasRenderingContext2D
     ) => {
-      let paintImages: IPaintImages;
-      switch (layer) {
-        case "layer1":
-          paintImages = this.protectedData.maskData.paintImagesLayer1;
-          console.log("paintImagesLayer1", paintImages);
-
-          break;
-        case "layer2":
-          paintImages = this.protectedData.maskData.paintImagesLayer2;
-          break;
-        case "layer3":
-          paintImages = this.protectedData.maskData.paintImagesLayer3;
-          break;
-        default:
-          paintImages = this.protectedData.maskData.paintImages;
-          break;
-      }
       const tempPreImg = this.filterDrawedImage(
         this.protectedData.axis,
         this.nrrd_states.currentIndex,
-        paintImages
       )?.image;
       this.protectedData.canvases.emptyCanvas.width =
         this.protectedData.canvases.emptyCanvas.width;
 
-      if (tempPreImg && layer == "default") {
+      if (tempPreImg) {
         this.protectedData.previousDrawingImage = tempPreImg;
       }
-      this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg, 0, 0);
+      this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg!, 0, 0);
       // draw previous image — disable smoothing to preserve exact RGB channel colors
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(
@@ -661,7 +642,7 @@ export class DrawToolCore extends CommToolsData {
               // Clear only the current layer canvas (NOT master)
               canvas.width = canvas.width;
               // Redraw previous layer data from volume
-              redrawPreviousImageToLayerCtx(ctx, this.gui_states.layer);
+              redrawPreviousImageToLayerCtx(ctx);
               // Draw new pencil strokes on current layer canvas
               ctx.beginPath();
               ctx.moveTo(lines[0].x, lines[0].y);
@@ -814,7 +795,6 @@ export class DrawToolCore extends CommToolsData {
       "pointerleave",
       (e: MouseEvent) => {
         Is_Painting = false;
-        // (this.sceneIn as copperScene).controls.enabled = true;
         if (leftclicked) {
           leftclicked = false;
           this.protectedData.ctxes.drawingLayerMasterCtx.closePath();
@@ -1036,8 +1016,6 @@ export class DrawToolCore extends CommToolsData {
   }
 
   private useEraser() {
-    console.log("use eraser");
-
     return this.eraserTool.createClearArc();
   }
   // drawing canvas mouse zoom wheel
