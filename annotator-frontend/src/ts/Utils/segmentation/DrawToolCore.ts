@@ -630,7 +630,8 @@ export class DrawToolCore extends CommToolsData {
         this.protectedData.previousDrawingImage = tempPreImg;
       }
       this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg, 0, 0);
-      // draw privous image
+      // draw previous image — disable smoothing to preserve exact RGB channel colors
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0,
@@ -655,14 +656,11 @@ export class DrawToolCore extends CommToolsData {
           );
           if (!this.gui_states.Eraser) {
             if (this.gui_states.segmentation) {
-              this.protectedData.canvases.drawingCanvasLayerMaster.width =
-                this.protectedData.canvases.drawingCanvasLayerMaster.width;
+              // Clear only the current layer canvas (NOT master)
               canvas.width = canvas.width;
-              redrawPreviousImageToLayerCtx(
-                this.protectedData.ctxes.drawingLayerMasterCtx
-              );
+              // Redraw previous layer data from volume
               redrawPreviousImageToLayerCtx(ctx, this.gui_states.layer);
-              // draw new drawings
+              // Draw new pencil strokes on current layer canvas
               ctx.beginPath();
               ctx.moveTo(lines[0].x, lines[0].y);
               for (let i = 1; i < lines.length; i++) {
@@ -672,14 +670,8 @@ export class DrawToolCore extends CommToolsData {
               ctx.lineWidth = 1;
               ctx.fillStyle = this.gui_states.fillColor;
               ctx.fill();
-              // draw layer to master layer
-              this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
-                canvas,
-                0,
-                0,
-                this.nrrd_states.changedWidth,
-                this.nrrd_states.changedHeight
-              );
+              // Composite ALL layers to master (not just current layer)
+              this.compositeAllLayers();
             }
           }
 
@@ -924,6 +916,8 @@ export class DrawToolCore extends CommToolsData {
             );
           }
         }
+        // globalAlpha was set to gui_states.globalAlpha at the top of start().
+        // Master stores full-alpha pixels; transparency applied here only.
         this.protectedData.ctxes.drawingCtx.drawImage(
           this.protectedData.canvases.drawingCanvasLayerMaster,
           0,
@@ -970,8 +964,10 @@ export class DrawToolCore extends CommToolsData {
   private paintOnCanvasLayer(x: number, y: number) {
     let { ctx, canvas } = this.setCurrentLayer();
 
+    // Draw only on the current layer canvas (not master directly)
     this.drawLinesOnLayer(ctx, x, y);
-    this.drawLinesOnLayer(this.protectedData.ctxes.drawingLayerMasterCtx, x, y);
+    // Composite all layers to master to preserve other layers' data
+    this.compositeAllLayers();
     // reset drawing start position to current position.
     this.nrrd_states.drawStartPos.x = x;
     this.nrrd_states.drawStartPos.y = y;
@@ -1062,6 +1058,8 @@ export class DrawToolCore extends CommToolsData {
   }
 
   drawImageOnEmptyImage(canvas: HTMLCanvasElement) {
+    // Disable image smoothing to preserve exact RGB channel colors during scaling
+    this.protectedData.ctxes.emptyCtx.imageSmoothingEnabled = false;
     this.protectedData.ctxes.emptyCtx.drawImage(
       canvas,
       0,

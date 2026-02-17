@@ -8,25 +8,25 @@
         title="Layer & Channel"
       ></v-list-item>
     </template>
-    
+
     <div class="lc-container" :class="{ 'global-disabled': !controlsEnabled }">
       <!-- Layer Section -->
       <div class="section-header">
         <span class="label">Layers</span>
       </div>
-      
+
       <div class="layer-list">
-        <div 
-          v-for="layer in LAYER_CONFIGS" 
+        <div
+          v-for="layer in LAYER_CONFIGS"
           :key="layer.id"
           class="layer-item"
-          :class="{ 
+          :class="{
             'active': activeLayer === layer.id,
             'is-hidden': !layerVisibility[layer.id]
           }"
         >
           <!-- Visibility Toggle (Left) -->
-          <div 
+          <div
             class="layer-vis-btn"
             :class="{ 'visible': layerVisibility[layer.id], 'hidden': !layerVisibility[layer.id] }"
             @click.stop="onToggleLayerVisibility(layer.id)"
@@ -36,8 +36,8 @@
           </div>
 
           <!-- Selection (Right) -->
-          <div 
-            class="layer-select-area" 
+          <div
+            class="layer-select-area"
             @click="onSelectLayer(layer.id)"
           >
             <span class="layer-name">{{ layer.name }}</span>
@@ -55,11 +55,11 @@
       </div>
 
       <div class="channel-grid">
-        <div 
+        <div
           v-for="channel in CHANNEL_CONFIGS"
           :key="channel.value"
           class="channel-card"
-          :class="{ 
+          :class="{
             'active': activeChannel === channel.value,
             'is-disabled': isChannelDisabled(channel.value),
             'parent-hidden': !layerVisibility[activeLayer]
@@ -72,8 +72,7 @@
           </div>
 
           <!-- Visibility Toggle (Absolute Positioned) -->
-          <!-- Only show if parent layer is visible, otherwise entire channel is effectively hidden -->
-          <div 
+          <div
             v-if="layerVisibility[activeLayer]"
             class="channel-vis-toggle"
             @click.stop="onToggleChannelVisibility(channel.value)"
@@ -85,7 +84,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Disabled Overlay when controls not enabled -->
       <div v-if="!controlsEnabled" class="disabled-overlay">
         <span>Load image to enable</span>
@@ -99,18 +98,33 @@
 /**
  * LayerChannelSelector Component
  *
- * Phase 7 - Step 10b: Layer/Channel Selection UI (Refined)
+ * Phase 3.5: Layer/Channel Selection UI
  *
- * Updates:
- * - Disabled states when hidden
- * - Restricted selection logic
- * - Enhanced visuals (Neon/Cyberpunk aesthetics)
+ * Wired to NrrdTools via useLayerChannel composable.
  */
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
 import * as Copper from "@/ts/index";
 import { useLayerChannel, LAYER_CONFIGS, CHANNEL_CONFIGS, type ChannelConfig } from "@/composables/left-panel";
 
+// ===== NrrdTools ref (received via emitter) =====
+const nrrdTools = ref<Copper.NrrdTools | undefined>();
+
+// ===== Composable =====
+const {
+  activeLayer,
+  activeChannel,
+  layerVisibility,
+  channelVisibility,
+  controlsEnabled,
+  setActiveLayer,
+  setActiveChannel,
+  toggleLayerVisibility,
+  toggleChannelVisibility,
+  enableControls,
+  disableControls,
+  syncFromManager,
+} = useLayerChannel({ nrrdTools });
 
 // ===== Logic =====
 
@@ -125,9 +139,7 @@ const isChannelDisabled = (val: number) => {
 // Style for active badge
 const activeBadgeStyle = computed(() => {
   if (!controlsEnabled.value) return {};
-  // Find current channel config to get color
   const conf = CHANNEL_CONFIGS.find(c => c.value === activeChannel.value);
-  // Use a brighter color logic or just use the config color
   const color = conf?.color.replace(',0.6)', ',1)').replace('rgba', 'rgba') || '#fff';
   return {
     backgroundColor: color,
@@ -140,11 +152,10 @@ const getChannelStyle = (channel: ChannelConfig) => {
   const isActive = activeChannel.value === channel.value;
   const isHidden = !channelVisibility.value[activeLayer.value]?.[channel.value];
   const isLayerHidden = !layerVisibility.value[activeLayer.value];
-  
-  if (isLayerHidden) return {}; // Parent hidden style takes precedence via class
 
-  // Base color from config (convert to solid for UI pop)
-  const baseColor = channel.color.replace(',0.6)', ',1)'); // Hacky alpha replace for specific rgba format
+  if (isLayerHidden) return {};
+
+  const baseColor = channel.color.replace(',0.6)', ',1)');
 
   if (isActive) {
     return {
@@ -153,27 +164,25 @@ const getChannelStyle = (channel: ChannelConfig) => {
       color: '#fff'
     };
   }
-  
+
   if (isHidden) {
       return { opacity: 0.4 };
   }
 
-  // Normal visible state
   return {
-      borderColor: 'rgba(255,255,255,0.1)'
+      borderColor: 'rgba(var(--v-theme-on-surface), 0.12)'
   };
 };
 
 const getVisIconColor = (val: number) => {
   const isVisible = channelVisibility.value[activeLayer.value]?.[val];
-  return isVisible ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+  return isVisible ? 'rgba(var(--v-theme-on-surface), 0.9)' : 'rgba(var(--v-theme-on-surface), 0.38)';
 };
 
 // ===== Event Handlers =====
 
 function onSelectLayer(layerId: Copper.LayerId): void {
   if (!layerVisibility.value[layerId]) {
-    // Shake or deny? For now just ignore
     return;
   }
   setActiveLayer(layerId);
@@ -186,23 +195,16 @@ function onSelectChannel(channel: Copper.ChannelValue): void {
 
 function onToggleLayerVisibility(layerId: Copper.LayerId): void {
   toggleLayerVisibility(layerId);
-  // If we just hid the active layer, maybe we should warn?
-  // Current logic: Logic keeps it active but disabled.
 }
 
 function onToggleChannelVisibility(channel: Copper.ChannelValue): void {
-  // Only allow toggling if layer is visible? 
-  // User req: "hide layer -> disable all channels". toggle is a control, maybe still allowed? 
-  // The user said "disable it". Usually implies interactive elements.
-  // But if I can't unhide it, I'm stuck. So Toggling MUST remain enabled.
-  // It's the SELECTION that is disabled.
   toggleChannelVisibility(activeLayer.value, channel);
 }
 
 // ===== Emitter Handlers =====
 
-const emitterOnSegmentationManager = (mgr: Copper.SegmentationManager) => {
-  segmentationManager.value = mgr;
+const emitterOnNrrdTools = (tools: Copper.NrrdTools) => {
+  nrrdTools.value = tools;
 };
 
 const emitterOnFinishLoadAllCaseImages = () => {
@@ -217,13 +219,13 @@ const emitterOnCaseSwitched = () => {
 // ===== Lifecycle =====
 
 onMounted(() => {
-  emitter.on("Core:SegmentationManager", emitterOnSegmentationManager);
+  emitter.on("Core:NrrdTools", emitterOnNrrdTools);
   emitter.on("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
   emitter.on("Segementation:CaseSwitched", emitterOnCaseSwitched);
 });
 
 onUnmounted(() => {
-  emitter.off("Core:SegmentationManager", emitterOnSegmentationManager);
+  emitter.off("Core:NrrdTools", emitterOnNrrdTools);
   emitter.off("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
   emitter.off("Segementation:CaseSwitched", emitterOnCaseSwitched);
 });
@@ -232,9 +234,10 @@ onUnmounted(() => {
 <style scoped>
 .lc-container {
   padding: 12px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgb(var(--v-theme-surface));
   position: relative;
   min-height: 150px;
+  border-radius: 4px;
 }
 
 .disabled-overlay {
@@ -243,13 +246,13 @@ onUnmounted(() => {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(var(--v-theme-surface), 0.8);
     backdrop-filter: blur(2px);
     z-index: 10;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255,255,255,0.7);
+    color: rgba(var(--v-theme-on-surface), 0.7);
     font-size: 12px;
     font-weight: 500;
 }
@@ -265,7 +268,7 @@ onUnmounted(() => {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--v-theme-on-surface), 0.7);
   font-weight: 600;
 }
 
@@ -273,11 +276,11 @@ onUnmounted(() => {
   font-size: 10px;
   padding: 2px 8px;
   border-radius: 10px;
-  color: #000;
+  color: rgb(var(--v-theme-on-primary));
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 0 5px rgba(255,255,255,0.5);
+  box-shadow: 0 0 5px rgba(var(--v-theme-on-surface), 0.3);
   transition: all 0.3s ease;
 }
 
@@ -293,15 +296,15 @@ onUnmounted(() => {
   display: flex;
   height: 32px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   overflow: hidden;
   transition: all 0.2s ease;
 }
 
 .layer-item.active {
-  border-color: var(--v-theme-nav-success-2, #4CAF50);
-  background: linear-gradient(90deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.05));
+  border-color: rgb(var(--v-theme-nav-success-2));
+  background: linear-gradient(90deg, rgba(var(--v-theme-nav-success-2), 0.2), rgba(var(--v-theme-nav-success-2), 0.05));
 }
 
 .layer-item.is-hidden {
@@ -316,22 +319,22 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0,0,0,0.2);
+  border-right: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  background: rgba(var(--v-theme-on-surface), 0.05);
   transition: background 0.2s;
 }
 
 .layer-vis-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(var(--v-theme-on-surface), 0.15);
 }
 
 .layer-vis-btn.visible {
-  color: #fff;
-  text-shadow: 0 0 5px rgba(255,255,255,0.5);
+  color: rgb(var(--v-theme-on-surface));
+  text-shadow: 0 0 5px rgba(var(--v-theme-on-surface), 0.3);
 }
 
 .layer-vis-btn.hidden {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(var(--v-theme-on-surface), 0.3);
 }
 
 /* Selection Area (Right Part) */
@@ -344,21 +347,21 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(var(--v-theme-on-surface), 0.8);
 }
 
 .layer-item.is-hidden .layer-select-area {
     cursor: not-allowed;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(var(--v-theme-on-surface), 0.4);
 }
 
 .layer-item.active .layer-select-area {
-  color: #fff;
+  color: rgb(var(--v-theme-on-surface));
   font-weight: bold;
 }
 
 .layer-select-area:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--v-theme-on-surface), 0.05);
 }
 
 .status-text {
@@ -378,8 +381,8 @@ onUnmounted(() => {
 .channel-card {
   position: relative;
   height: 44px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--v-theme-surface), 0.5);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 6px;
   cursor: pointer;
   display: flex;
@@ -391,12 +394,11 @@ onUnmounted(() => {
 }
 
 .channel-card:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(var(--v-theme-on-surface), 0.08);
   transform: translateY(-1px);
 }
 
 .channel-card.active {
-    /* Style handled by inline styles for dynamic color */
   transform: scale(1.02);
   z-index: 1;
 }
@@ -409,7 +411,7 @@ onUnmounted(() => {
 }
 
 .channel-card.parent-hidden {
-    pointer-events: none; /* Cannot even hover */
+    pointer-events: none;
     opacity: 0.2;
 }
 
@@ -432,7 +434,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(var(--v-theme-on-surface), 0.2);
   opacity: 0.6;
   z-index: 5;
   cursor: pointer;
@@ -440,7 +442,7 @@ onUnmounted(() => {
 }
 
 .channel-vis-toggle:hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(var(--v-theme-on-surface), 0.4);
   opacity: 1;
   transform: scale(1.1);
 }

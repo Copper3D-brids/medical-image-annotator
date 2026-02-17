@@ -522,6 +522,152 @@ export class MaskVolume {
     }
   }
 
+  // ── Label-based storage (1-channel volumes) ────────────────────────
+
+  /**
+   * Store label data from canvas RGBA ImageData into a 1-channel volume.
+   *
+   * For each pixel: matches the RGB color against MASK_CHANNEL_COLORS to
+   * determine which channel label to store. If no match is found, falls
+   * back to `activeChannel`. Transparent pixels (alpha === 0) are stored as 0.
+   *
+   * This is the write counterpart to `renderLabelSliceInto`.
+   *
+   * @param sliceIndex     Index along the specified axis.
+   * @param imageData      Canvas ImageData (RGBA) to convert.
+   * @param axis           `'x'`, `'y'`, or `'z'`.
+   * @param activeChannel  Fallback label for pixels whose RGB doesn't match any channel (1-8).
+   */
+  setSliceLabelsFromImageData(
+    sliceIndex: number,
+    imageData: ImageData,
+    axis: 'x' | 'y' | 'z' = 'z',
+    activeChannel: number = 1,
+  ): void {
+    this.validateSliceIndex(sliceIndex, axis);
+
+    const [expectedW, expectedH] = this.getSliceDimensions(axis);
+    if (imageData.width !== expectedW || imageData.height !== expectedH) {
+      throw new Error(
+        `ImageData size mismatch: expected ${expectedW}×${expectedH}, ` +
+        `got ${imageData.width}×${imageData.height}`
+      );
+    }
+
+    // Build RGB→channel lookup map for O(1) reverse lookup
+    const rgbToChannel = MaskVolume.buildRgbToChannelMap();
+
+    const pixels = imageData.data;
+
+    for (let j = 0; j < expectedH; j++) {
+      for (let i = 0; i < expectedW; i++) {
+        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
+        const px = (j * expectedW + i) * 4;
+        const alpha = pixels[px + 3];
+
+        if (alpha === 0) {
+          // Transparent pixel → background label
+          this.data[this.getIndex(vx, vy, vz, 0)] = 0;
+          continue;
+        }
+
+        // Match RGB against known channel colors
+        const r = pixels[px];
+        const g = pixels[px + 1];
+        const b = pixels[px + 2];
+        const key = (r << 16) | (g << 8) | b;
+        const matchedChannel = rgbToChannel.get(key);
+
+        this.data[this.getIndex(vx, vy, vz, 0)] = matchedChannel !== undefined
+          ? matchedChannel
+          : activeChannel;
+      }
+    }
+  }
+
+  /**
+   * Build a Map from RGB packed integer to channel label for reverse lookup.
+   * Uses MASK_CHANNEL_COLORS channels 1-8 (skips 0 = transparent).
+   */
+  private static buildRgbToChannelMap(): Map<number, number> {
+    const map = new Map<number, number>();
+    for (let ch = 1; ch <= 8; ch++) {
+      const color = MASK_CHANNEL_COLORS[ch];
+      if (color) {
+        const key = (color.r << 16) | (color.g << 8) | color.b;
+        map.set(key, ch);
+      }
+    }
+    return map;
+  }
+
+  // ── Label-based rendering (1-channel volumes) ─────────────────────
+
+  /**
+   * Render a 1-channel label slice into a pre-allocated RGBA ImageData buffer.
+   *
+   * Each voxel stores a label value (0-8). Label 0 = transparent.
+   * Labels 1-8 are mapped to colors via MASK_CHANNEL_COLORS, filtered
+   * by the channelVisible array.
+   *
+   * @param sliceIndex   Index along the specified axis.
+   * @param axis         `'x'`, `'y'`, or `'z'`.
+   * @param target       Pre-allocated ImageData buffer (must match slice dimensions).
+   * @param channelVisible  Array where index N indicates if channel N is visible.
+   *                        If undefined, all channels are visible.
+   * @param opacity      Opacity multiplier 0.0–1.0 (default 1.0).
+   */
+  renderLabelSliceInto(
+    sliceIndex: number,
+    axis: 'x' | 'y' | 'z' = 'z',
+    target: ImageData,
+    channelVisible?: Record<number, boolean>,
+    opacity: number = 1.0,
+  ): void {
+    this.validateSliceIndex(sliceIndex, axis);
+
+    const [sliceWidth, sliceHeight] = this.getSliceDimensions(axis);
+    if (target.width !== sliceWidth || target.height !== sliceHeight) {
+      throw new Error(
+        `Buffer size mismatch: expected ${sliceWidth}×${sliceHeight}, ` +
+        `got ${target.width}×${target.height}`
+      );
+    }
+
+    const pixels = target.data;
+
+    for (let j = 0; j < sliceHeight; j++) {
+      for (let i = 0; i < sliceWidth; i++) {
+        const [vx, vy, vz] = this.mapSliceToVolume(i, j, sliceIndex, axis);
+        const label = this.data[this.getIndex(vx, vy, vz, 0)];
+        const px = (j * sliceWidth + i) * 4;
+
+        if (label === 0) {
+          pixels[px] = 0;
+          pixels[px + 1] = 0;
+          pixels[px + 2] = 0;
+          pixels[px + 3] = 0;
+          continue;
+        }
+
+        // Check channel visibility
+        if (channelVisible && !channelVisible[label]) {
+          pixels[px] = 0;
+          pixels[px + 1] = 0;
+          pixels[px + 2] = 0;
+          pixels[px + 3] = 0;
+          continue;
+        }
+
+        const color = this.colorMap[label] ?? MASK_CHANNEL_COLORS[label] ?? MASK_CHANNEL_COLORS[1];
+        pixels[px] = color.r;
+        pixels[px + 1] = color.g;
+        pixels[px + 2] = color.b;
+        pixels[px + 3] = Math.round(color.a * opacity);
+      }
+    }
+  }
+
   // ── Accessors ──────────────────────────────────────────────────────
 
   /**

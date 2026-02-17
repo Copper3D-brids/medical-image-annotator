@@ -975,7 +975,40 @@ If performance profiling shows significant X/Y-axis usage:
 
 ---
 
-**Last Updated:** 2026-02-12
-**Status:** Ready for Implementation
+---
+
+## Phase 3.5: Layer & Channel Management
+
+### Overview
+Adds layer visibility controls, 8-channel-per-layer annotation support with distinct colors, and channel visibility controls. MaskVolume storage switched from 4-channel RGBA to 1-channel label storage (0=transparent, 1-8=channel labels).
+
+### Key Changes
+
+1. **1-Channel Label Storage**: MaskVolume uses 1 byte per voxel (label 0-8) instead of 4 bytes (RGBA). 4× memory reduction.
+2. **Label→Color Rendering**: New `renderLabelSliceInto()` method converts labels to RGBA colors during rendering, respecting channel visibility.
+3. **Label Storage from Canvas**: New `setSliceLabelsFromImageData()` converts canvas RGBA → label value when storing.
+4. **Layer Visibility**: `compositeAllLayers()` skips hidden layers.
+5. **Channel Visibility**: `renderSliceToCanvas()` filters by per-layer channel visibility.
+6. **Channel-Aware Eraser**: Only erases pixels matching the active channel's color.
+7. **NrrdTools Public API**: 10 new methods for layer/channel management.
+8. **Vue Integration**: `LayerChannelSelector.vue` → `useLayerChannel.ts` → `NrrdTools` via `Core:NrrdTools` emitter.
+
+### Files Modified
+- `core/types.ts`: LayerId, ChannelValue, CHANNEL_COLORS, CHANNEL_HEX_COLORS
+- `core/index.ts`, `ts/index.ts`: Export new types
+- `core/MaskVolume.ts`: renderLabelSliceInto(), setSliceLabelsFromImageData()
+- `coreTools/coreType.ts`: activeChannel, layerVisibility, channelVisibility in IGUIStates
+- `CommToolsData.ts`: 1-channel MaskVolume init, updated renderSliceToCanvas/filterDrawedImage
+- `NrrdTools.ts`: 10 public API methods, layer-visibility-aware compositeAllLayers
+- `tools/EraserTool.ts`: Channel-aware circular eraser
+- `tools/ImageStoreHelper.ts`: Label-based storage and rendering
+- `coreTools/gui.ts`: Channel-aware color on layer change
+- `useLayerChannel.ts`: ILayerChannelDeps with NrrdTools ref
+- `LayerChannelSelector.vue`: Wired to NrrdTools via Core:NrrdTools emitter
+
+---
+
+**Last Updated:** 2026-02-15
+**Status:** Phase 3.5 Implemented
 **Dependencies:** None
 **Blocks:** Tool Extraction Phase 1

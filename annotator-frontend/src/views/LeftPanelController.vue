@@ -131,7 +131,6 @@ const dialog = ref(false);
 
 // Copper3D refs
 const nrrdTools = ref<Copper.NrrdTools | undefined>();
-const segmentationManager = ref<Copper.SegmentationManager | undefined>();  // Phase 7
 const loadBarMain = ref<Copper.loadingBarType | undefined>();
 const loadingContainer = ref<HTMLDivElement | undefined>();
 const progress = ref<HTMLDivElement | undefined>();
@@ -148,7 +147,6 @@ const caseManagement = useCaseManagement({
 
 const maskOps = useMaskOperations({
   nrrdTools,
-  segmentationManager,  // Phase 7: Pass SegmentationManager for mask data sync
   loadingContainer,
   progress,
   loadBarMain,
@@ -161,13 +159,11 @@ const maskOps = useMaskOperations({
 
 const distanceCalc = useDistanceCalculation({
   nrrdTools,
-  segmentationManager,  // Phase 7: Pass SegmentationManager for voxelSpacing/spaceOrigin
   currentCaseName: caseManagement.currentCaseName,
 });
 
 const sliceNav = useSliceNavigation({
-  nrrdTools,
-  segmentationManager,  // Phase 7
+  nrrdTools
 });
 
 // Emitter handlers
@@ -218,8 +214,6 @@ onUnmounted(() => {
 // Event handlers
 const onFinishedCopperInit = (copperInitData: ILeftCoreCopperInit) => {
   nrrdTools.value = copperInitData.nrrdTools;
-  segmentationManager.value = copperInitData.segmentationManager;  // Phase 7
-  console.log('[Phase 7 - Step 1] SegmentationManager received in Controller:', segmentationManager.value);
 };
 
 const onOpenDialog = (flag: boolean) => { dialog.value = flag; };
@@ -248,69 +242,6 @@ const handleAllImagesLoaded = async (res: IToolAfterLoadImagesResponse) => {
   // Then update nav state (sets initSliceIndex which uses fileNum)
   sliceNav.updateNavigationAfterLoad();
 
-  // Phase 7 - Step 3: Configure DimensionAdapter and Initialize SegmentationManager
-  if (segmentationManager.value && nrrdTools.value) {
-    const nrrd = nrrdTools.value;
-    const states = nrrd.getNrrdToolsSettings();
-
-    // Configure DimensionAdapter
-    segmentationManager.value.setDimensionAdapter({
-      getDimensions: () => [
-        states.nrrd_x_pixel,
-        states.nrrd_y_pixel,
-        states.nrrd_z_pixel,
-      ],
-      getVoxelSpacing: () => states.voxelSpacing,
-      getSpaceOrigin: () => states.spaceOrigin,
-      getCurrentSliceIndex: () => states.currentIndex,
-      getCurrentAxis: () => nrrd.protectedData.axis,
-      getSizeFactor: () => states.sizeFoctor,
-      getGlobalAlpha: () => nrrd.gui_states.globalAlpha,
-    });
-
-    // Initialize SegmentationManager with dimensions
-    segmentationManager.value.initialize({
-      width: states.nrrd_x_pixel,
-      height: states.nrrd_y_pixel,
-      depth: states.nrrd_z_pixel,
-    });
-
-    console.log('[Phase 7 - Step 3] SegmentationManager initialized with dimensions:', {
-      width: states.nrrd_x_pixel,
-      height: states.nrrd_y_pixel,
-      depth: states.nrrd_z_pixel,
-    });
-
-    // Phase 7 - Step 7: Register tools to SegmentationManager
-    const segMgr = segmentationManager.value;
-    const toolContext: Copper.ToolContext = {
-      layerManager: segMgr.getLayerManager(),
-      undoManager: segMgr.getUndoManager(),
-      visibilityManager: segMgr.getVisibilityManager(),
-      keyboardManager: segMgr.getKeyboardManager(),
-      currentChannel: 1,
-      currentSlice: states.currentIndex,
-      currentAxis: nrrd.protectedData.axis,
-      brushSize: 15,
-      sizeFactor: states.sizeFoctor,
-      globalAlpha: nrrd.gui_states.globalAlpha,
-      drawingCtx: null,  // Will be set when canvas events are wired (Step 8+)
-      drawingCanvas: null,
-      requestRender: () => segmentationManager.value?.render?.(),
-    };
-
-    // Register all tools
-    segMgr.registerTool('pencil', new Copper.PencilTool(toolContext));
-    segMgr.registerTool('brush', new Copper.BrushTool(toolContext));
-    segMgr.registerTool('eraser', new Copper.EraserTool(toolContext));
-    segMgr.registerTool('pan', new Copper.PanTool(toolContext));
-    segMgr.registerTool('zoom', new Copper.ZoomTool(toolContext));
-    segMgr.registerTool('contrast', new Copper.ContrastTool(toolContext));
-    segMgr.registerTool('sphere', new Copper.SphereTool(toolContext));
-    segMgr.registerTool('crosshair', new Copper.CrosshairTool(toolContext));
-
-    console.log('[Phase 7 - Step 7] Tools registered:', segMgr.getRegisteredTools());
-  }
 
   // Build contrast state
   const selectedState: TContrastSelected = {};

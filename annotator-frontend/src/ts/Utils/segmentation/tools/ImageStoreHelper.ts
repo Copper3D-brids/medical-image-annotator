@@ -55,6 +55,18 @@ export class ImageStoreHelper extends BaseTool {
     return this.getVolumeForLayer(this.ctx.gui_states.layer);
   }
 
+  /**
+   * Get the canvas element for a specific layer.
+   */
+  private getCanvasForLayer(layer: string): HTMLCanvasElement {
+    switch (layer) {
+      case "layer1": return this.ctx.protectedData.canvases.drawingCanvasLayerOne;
+      case "layer2": return this.ctx.protectedData.canvases.drawingCanvasLayerTwo;
+      case "layer3": return this.ctx.protectedData.canvases.drawingCanvasLayerThree;
+      default: return this.ctx.protectedData.canvases.drawingCanvasLayerMaster;
+    }
+  }
+
   // ===== Store Image To Axis =====
 
   /**
@@ -84,7 +96,13 @@ export class ImageStoreHelper extends BaseTool {
     try {
       const volume = this.getCurrentVolume();
       if (volume) {
-        const imageData = volume.getSliceRawImageData(sliceIndex, axis);
+        const dims = volume.getDimensions();
+        const [w, h] = axis === 'z' ? [dims.width, dims.height]
+          : axis === 'y' ? [dims.width, dims.depth]
+          : [dims.height, dims.depth];
+        const imageData = new ImageData(w, h);
+        const channelVis = this.ctx.gui_states.channelVisibility[this.ctx.gui_states.layer];
+        volume.renderLabelSliceInto(sliceIndex, axis, imageData, channelVis);
         return { index: sliceIndex, image: imageData };
       }
     } catch (err) {
@@ -103,11 +121,12 @@ export class ImageStoreHelper extends BaseTool {
   storeAllImages(index: number, layer: string): void {
     const nrrd = this.ctx.nrrd_states;
 
+    // Read from the individual layer canvas (NOT master) to preserve layer isolation
+    const layerCanvas = this.getCanvasForLayer(layer);
+
     if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
       this.callbacks.setEmptyCanvasSize();
-      this.callbacks.drawImageOnEmptyImage(
-        this.ctx.protectedData.canvases.drawingCanvasLayerMaster
-      );
+      this.callbacks.drawImageOnEmptyImage(layerCanvas);
     }
 
     const imageData = this.ctx.protectedData.ctxes.emptyCtx.getImageData(
@@ -117,22 +136,21 @@ export class ImageStoreHelper extends BaseTool {
       this.ctx.protectedData.canvases.emptyCanvas.height
     );
 
-    // Phase 2: Write into MaskVolume (primary storage)
+    // Write label data into 1-channel MaskVolume with RGB→channel reverse lookup
     try {
       const volume = this.getVolumeForLayer(layer);
       if (volume) {
-        volume.setSliceFromImageData(
+        const activeChannel = this.ctx.gui_states.activeChannel || 1;
+        volume.setSliceLabelsFromImageData(
           index,
           imageData,
-          this.ctx.protectedData.axis
+          this.ctx.protectedData.axis,
+          activeChannel
         );
       }
     } catch (err) {
-      // Volume not ready — continue with legacy path only
+      // Volume not ready — skip
     }
-
-    // Phase 3: Cross-axis sync now handled by MaskVolume's 3D storage
-    // No need to manually sync paintImages arrays
 
     if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
       // Notify parent component (legacy callback)
@@ -149,6 +167,32 @@ export class ImageStoreHelper extends BaseTool {
 
 
   // ===== Store Per-Layer Images =====
+
+  /**
+   * Store a single layer's canvas data to its MaskVolume.
+   * Reads from the individual layer canvas (not master) and uses RGB→channel reverse lookup.
+   */
+  storeEachLayerImage(index: number, layer: string): void {
+    const layerCanvas = this.getCanvasForLayer(layer);
+    this.callbacks.setEmptyCanvasSize();
+    this.callbacks.drawImageOnEmptyImage(layerCanvas);
+    const imageData = this.ctx.protectedData.ctxes.emptyCtx.getImageData(
+      0, 0,
+      this.ctx.protectedData.canvases.emptyCanvas.width,
+      this.ctx.protectedData.canvases.emptyCanvas.height
+    );
+    try {
+      const volume = this.getVolumeForLayer(layer);
+      if (volume) {
+        const activeChannel = this.ctx.gui_states.activeChannel || 1;
+        volume.setSliceLabelsFromImageData(
+          index, imageData, this.ctx.protectedData.axis, activeChannel
+        );
+      }
+    } catch {
+      // Volume not ready — skip
+    }
+  }
 
   /**
    * Phase 3: Simplified - extracts ImageData from canvas but no longer stores to paintImages.
@@ -313,6 +357,12 @@ export class ImageStoreHelper extends BaseTool {
       return sharedPlaceImages;
     }
 
+    const dims = volume.getDimensions();
+    const [w, h] = axis === 'z' ? [dims.width, dims.height]
+      : axis === 'y' ? [dims.width, dims.depth]
+      : [dims.height, dims.depth];
+    const channelVis = this.ctx.gui_states.channelVisibility[this.ctx.gui_states.layer];
+
     // Check previous slices
     for (let i = 1; i <= 3; i++) {
       const index = this.ctx.nrrd_states.currentIndex - i;
@@ -324,7 +374,8 @@ export class ImageStoreHelper extends BaseTool {
       );
       if (newIndex === base) {
         try {
-          const imageData = volume.getSliceRawImageData(index, axis);
+          const imageData = new ImageData(w, h);
+          volume.renderLabelSliceInto(index, axis, imageData, channelVis);
           sharedPlaceImages.push(imageData);
         } catch {
           // Slice out of bounds - skip
@@ -343,7 +394,8 @@ export class ImageStoreHelper extends BaseTool {
       );
       if (newIndex === base) {
         try {
-          const imageData = volume.getSliceRawImageData(index, axis);
+          const imageData = new ImageData(w, h);
+          volume.renderLabelSliceInto(index, axis, imageData, channelVis);
           sharedPlaceImages.push(imageData);
         } catch {
           // Slice out of bounds - skip

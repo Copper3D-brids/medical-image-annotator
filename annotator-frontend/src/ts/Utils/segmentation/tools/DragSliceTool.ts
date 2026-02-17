@@ -175,44 +175,34 @@ export class DragSliceTool extends BaseTool {
   }
 
   /**
-   * Composite all 3 layer canvases to the master display canvas
-   *
-   * This ensures all layers are visible simultaneously (fixes multi-layer display bug)
+   * Composite all visible layer canvases to the master display canvas.
    */
   private compositeAllLayers(): void {
     const masterCtx = this.ctx.protectedData.ctxes.drawingLayerMasterCtx;
     const width = this.ctx.nrrd_states.changedWidth;
     const height = this.ctx.nrrd_states.changedHeight;
 
-    // Clear master canvas
     masterCtx.clearRect(0, 0, width, height);
 
-    // Composite layer1
-    masterCtx.drawImage(
-      this.ctx.protectedData.canvases.drawingCanvasLayerOne,
-      0,
-      0,
-      width,
-      height
-    );
-
-    // Composite layer2
-    masterCtx.drawImage(
-      this.ctx.protectedData.canvases.drawingCanvasLayerTwo,
-      0,
-      0,
-      width,
-      height
-    );
-
-    // Composite layer3
-    masterCtx.drawImage(
-      this.ctx.protectedData.canvases.drawingCanvasLayerThree,
-      0,
-      0,
-      width,
-      height
-    );
+    // Master stores full-alpha composite; globalAlpha applied in start() render loop.
+    if (this.ctx.gui_states.layerVisibility['layer1']) {
+      masterCtx.drawImage(
+        this.ctx.protectedData.canvases.drawingCanvasLayerOne,
+        0, 0, width, height
+      );
+    }
+    if (this.ctx.gui_states.layerVisibility['layer2']) {
+      masterCtx.drawImage(
+        this.ctx.protectedData.canvases.drawingCanvasLayerTwo,
+        0, 0, width, height
+      );
+    }
+    if (this.ctx.gui_states.layerVisibility['layer3']) {
+      masterCtx.drawImage(
+        this.ctx.protectedData.canvases.drawingCanvasLayerThree,
+        0, 0, width, height
+      );
+    }
   }
 
   // ===== Canvas Cleanup =====

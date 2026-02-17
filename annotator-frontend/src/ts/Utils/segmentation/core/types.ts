@@ -92,15 +92,15 @@ export interface SliceRenderOptions {
  * | 8       | Extended annotation        | Purple   |
  */
 export const MASK_CHANNEL_COLORS: Readonly<ChannelColorMap> = {
-  0: { r: 0, g: 0, b: 0, a: 0 },   // Background (transparent)
-  1: { r: 0, g: 255, b: 0, a: 153 },   // Green  — Primary / Tumor
-  2: { r: 255, g: 0, b: 0, a: 153 },   // Red    — Secondary / Edema
-  3: { r: 0, g: 0, b: 255, a: 153 },   // Blue   — Tertiary / Necrosis
-  4: { r: 255, g: 255, b: 0, a: 153 },   // Yellow — Enhancement
-  5: { r: 255, g: 0, b: 255, a: 153 },   // Magenta — Vessel / Boundary
-  6: { r: 0, g: 255, b: 255, a: 153 },   // Cyan   — Additional
-  7: { r: 255, g: 128, b: 0, a: 153 },   // Orange — Auxiliary
-  8: { r: 128, g: 0, b: 255, a: 153 },   // Purple — Extended
+  0: { r: 0, g: 0, b: 0, a: 0 },     // Background (transparent)
+  1: { r: 0, g: 255, b: 0, a: 255 },   // Green  — Primary / Tumor
+  2: { r: 255, g: 0, b: 0, a: 255 },   // Red    — Secondary / Edema
+  3: { r: 0, g: 0, b: 255, a: 255 },   // Blue   — Tertiary / Necrosis
+  4: { r: 255, g: 255, b: 0, a: 255 },   // Yellow — Enhancement
+  5: { r: 255, g: 0, b: 255, a: 255 },   // Magenta — Vessel / Boundary
+  6: { r: 0, g: 255, b: 255, a: 255 },   // Cyan   — Additional
+  7: { r: 255, g: 128, b: 0, a: 255 },   // Orange — Auxiliary
+  8: { r: 128, g: 0, b: 255, a: 255 },   // Purple — Extended
 };
 
 /**
@@ -108,12 +108,45 @@ export const MASK_CHANNEL_COLORS: Readonly<ChannelColorMap> = {
  */
 export const MASK_CHANNEL_CSS_COLORS: Readonly<Record<number, string>> = {
   0: 'rgba(0,0,0,0)',
-  1: 'rgba(0,255,0,0.6)',      // Green
-  2: 'rgba(255,0,0,0.6)',      // Red
-  3: 'rgba(0,0,255,0.6)',      // Blue
-  4: 'rgba(255,255,0,0.6)',    // Yellow
-  5: 'rgba(255,0,255,0.6)',    // Magenta
-  6: 'rgba(0,255,255,0.6)',    // Cyan
-  7: 'rgba(255,128,0,0.6)',    // Orange
-  8: 'rgba(128,0,255,0.6)',    // Purple
+  1: 'rgba(0,255,0,1)',        // Green
+  2: 'rgba(255,0,0,1)',        // Red
+  3: 'rgba(0,0,255,1)',        // Blue
+  4: 'rgba(255,255,0,1)',      // Yellow
+  5: 'rgba(255,0,255,1)',      // Magenta
+  6: 'rgba(0,255,255,1)',      // Cyan
+  7: 'rgba(255,128,0,1)',      // Orange
+  8: 'rgba(128,0,255,1)',      // Purple
+};
+
+// ── Layer & Channel Types ────────────────────────────────────────────────
+
+/**
+ * Layer identifier for the 3 independent mask layers.
+ */
+export type LayerId = 'layer1' | 'layer2' | 'layer3';
+
+/**
+ * Channel value (0 = transparent/erased, 1-8 = annotation channels).
+ */
+export type ChannelValue = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+/**
+ * Convenience alias for MASK_CHANNEL_CSS_COLORS.
+ * Used by Vue components via `Copper.CHANNEL_COLORS[channel]`.
+ */
+export const CHANNEL_COLORS: Readonly<Record<number, string>> = MASK_CHANNEL_CSS_COLORS;
+
+/**
+ * Hex color strings for each channel (no alpha), used for fillColor/brushColor.
+ */
+export const CHANNEL_HEX_COLORS: Readonly<Record<number, string>> = {
+  0: '#000000',
+  1: '#00ff00',   // Green
+  2: '#ff0000',   // Red
+  3: '#0000ff',   // Blue
+  4: '#ffff00',   // Yellow
+  5: '#ff00ff',   // Magenta
+  6: '#00ffff',   // Cyan
+  7: '#ff8000',   // Orange
+  8: '#8000ff',   // Purple
 };

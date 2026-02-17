@@ -55,3 +55,15 @@ Wait for my validation and confirmation before continuing.
 - 你根据NrrdTools 的方法来改造LayerChannelSelector.vue 和 useLayerChannel.ts让他们能实现我对layer和channel的管理和控制
 - 执行完成后，要更新mask_storage_migration_task.md
  
+
+
+ 现在有几个Bug:
+1. 它并没有实现将layer的操作和显示完全独立，原因是，我在测试时，我先在layer 1 的channel 1上使用pencil画了数据：
+    - 然后我切换到操作layer 2 上，在layer 2 的channel 1 上画了数据，然后layer 1 的channel 1的mask在画板上消失了，只剩下layer 2 的channel 1的数据。此时，我并没有更改layer 1 和 layer 2 的显示状态，它们应该都要显示才对。
+    - 然后，我隐藏layer1 后 马上有显示layer1，现在layer1和layer2的数据都出现在了画板上，此时我依然操作的是layer 2， 并没有切换过layer的操作，然后我使用橡皮擦去擦数据，发现layer 2的可以擦掉，layer 1 的擦不掉，这是对的。
+    - 现在我隐藏layer2， 然后在显示layer2， 新的问题来了，我发现layer2会自动复制layer 1 的channel 1的数据到layer 2 channel 1. 这是不合理的。它无论如何都不应该复制其他layer的数据。
+    - 这个问题很奇怪，当layer上有数据时，它们隐藏和显示时，它们似乎会互相复制数据。
+2. 并没有实现channel 的操作独立，首先，我在layer 1 的channel 1上使用pencil画了数据， 是绿色的mask，
+    - 然后我切换到layer 1 的channel 2， 使用pencil画了数据， 是红色的mask，现在画板上显示了channel 1 和 channel 2的数据是对的。然后我切换到layer 1 的channel 3，使用pencil画了数据是蓝色的mask， 现在问题来了，channel 1 和 channel 2的数据都变成红色的了，这意味着channel 1 被改写到channel 2了。 然后我切换到layer 1 的channel 4，使用pencil画了数据是黄色的mask，现在问题更严重了， channel 1， channel 2和channel 3的数据都变成蓝色的了。问题以此类推，当在新的channel上画数据时，会把之前所有channel的数据都改写到上一个channel上。这个问题只有在使用pencil时会发生，而且似乎它的alpha有问题，画出来的数据颜色在不断地加深。
+    - 现在我在此基础上测试橡皮擦：目前我在操作的是channel 4，channel 4上的数据是可以被擦除的。然后我切换到channel 2， 不能擦除任何数据，说明数据被改写到其他channel 了。 然后我切换到channel 3， 除了channel4 的mask不可以被擦除，其他数据都可以，验证了我的猜想，当在新的channel上画数据时，会把之前所有channel的数据都改写到上一个channel上。这是个大问题。
+    - 然后在此基础上，当前我选择的是channel 4， 我测试了切换slice， 发现，切换后再切换回来，所有mask的数据都被改写到了channel 4上。这是严重的bug， 切换slice，不允许修改layer及其channel的数据。再次测试，在切换contrast image时也会发生相同的情形，当你在那个channel上操作的，所有的mask都会被改到那个channel上去。

@@ -74,12 +74,16 @@ export type {
   RGBAColor,
   ChannelColorMap,
   SliceRenderOptions,
+  LayerId,
+  ChannelValue,
 } from './types';
 
 export {
   RenderMode,
   MASK_CHANNEL_COLORS,
   MASK_CHANNEL_CSS_COLORS,
+  CHANNEL_COLORS,
+  CHANNEL_HEX_COLORS,
 } from './types';
 
 // ── Core volume ────────────────────────────────────────────────────────────

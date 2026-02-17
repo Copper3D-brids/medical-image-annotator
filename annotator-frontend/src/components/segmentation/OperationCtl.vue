@@ -134,16 +134,7 @@ const contrastDragSensitivity = ref(25);
 
 const guiSettings = ref<any>();
 let nrrdTools:Copper.NrrdTools;
-let segmentationManager: Copper.SegmentationManager | undefined;  // Phase 7 - Step 8
 
-/** Phase 7: Map OperationCtl radio values to SegmentationManager GuiTool names */
-const toolNameMap: Record<string, Copper.GuiTool> = {
-  segmentation: 'pencil',
-  brush: 'brush',
-  Eraser: 'eraser',
-  sphere: 'sphere',
-  calculator: 'calculator',
-};
 
 const commFuncRadioValues = ref([
   { label: "Pencil", value: "segmentation", color: "success" },
@@ -196,7 +187,6 @@ function manageEmitters() {
   emitter.on("Common:DragImageWindowCenter", emitterOnDragImageWindowCenter);
   emitter.on("Common:DragImageWindowHigh", emitterOnDragImageWindowHigh);
   emitter.on("Core:NrrdTools", emitterOnNrrdTools);
-  emitter.on("Core:SegmentationManager", emitterOnSegmentationManager);  // Phase 7 - Step 8
 }
 
 const emitterOnCaseSwitched = async (casename:string) => {
@@ -238,10 +228,6 @@ const emitterOnDragImageWindowHigh = (step: number)=>{
 }
 const emitterOnNrrdTools = (tool:Copper.NrrdTools)=>{
   nrrdTools = tool
-}
-const emitterOnSegmentationManager = (mgr: Copper.SegmentationManager) => {
-  segmentationManager = mgr;
-  console.log('[Phase 7 - Step 8] SegmentationManager received in OperationCtl');
 }
 
 function dragToChangeImageWindow(type:"windowHigh"|"windowLow", step:number){
@@ -294,13 +280,6 @@ function toggleFuncRadios(val: any) {
         } else {
           guiSettings.value.guiState["segmentation"] = false;
           guiSettings.value.guiSetting["segmentation"].onChange();
-          // Phase 7 - Step 8: Sync tool for brush mode (early return path)
-          if (segmentationManager?.isInitialized()) {
-            const guiTool = toolNameMap[val];
-            if (guiTool) {
-              segmentationManager.setCurrentTool(guiTool);
-            }
-          }
           return;
         }
       }
@@ -318,13 +297,6 @@ function toggleFuncRadios(val: any) {
   prebtn.value=val;
   guiSettings.value.guiSetting[commFuncRadios.value].onChange();
 
-  // Phase 7 - Step 8: Sync tool selection to SegmentationManager
-  if (segmentationManager?.isInitialized()) {
-    const guiTool = toolNameMap[val];
-    if (guiTool) {
-      segmentationManager.setCurrentTool(guiTool);
-    }
-  }
 }
 
 function toggleSliderRadios(val: any) {
@@ -343,10 +315,6 @@ function toggleSlider(val: number) {
   }
   if (commSliderRadios.value === "brushAndEraserSize") {
     guiSettings.value.guiSetting[commSliderRadios.value].onChange();
-    // Phase 7 - Step 8: Sync brush size to SegmentationManager
-    if (segmentationManager?.isInitialized()) {
-      segmentationManager.setBrushSize(val);
-    }
   }
   if (commSliderRadios.value === "windowHigh" || commSliderRadios.value === "windowLow") {
     guiSettings.value.guiSetting[commSliderRadios.value].onChange(val);
@@ -401,7 +369,6 @@ onUnmounted(() => {
   emitter.off("Common:DragImageWindowCenter", emitterOnDragImageWindowCenter);
   emitter.off("Common:DragImageWindowHigh", emitterOnDragImageWindowHigh);
   emitter.off("Core:NrrdTools", emitterOnNrrdTools);
-  emitter.off("Core:SegmentationManager", emitterOnSegmentationManager);  // Phase 7 - Step 8
 });
 
 </script>

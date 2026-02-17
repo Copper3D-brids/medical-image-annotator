@@ -1,16 +1,19 @@
 /**
  * useLayerChannel Composable
  *
- * Phase 7 - Step 10b: Layer/Channel Selection UI
+ * Phase 3.5: Layer/Channel Selection UI
  *
  * Manages layer and channel selection state for the segmentation module.
- * Provides reactive state for Vue components and syncs with SegmentationManager.
+ * Provides reactive state for Vue components and syncs with NrrdTools.
  */
-import { ref, computed, onMounted, onUnmounted, type Ref, type ComputedRef } from "vue";
+import { ref, computed, type Ref, type ComputedRef } from "vue";
 import * as Copper from "@/ts/index";
 
 // ===== Types =====
 
+export interface ILayerChannelDeps {
+    nrrdTools: Ref<Copper.NrrdTools | undefined>;
+}
 
 export interface LayerConfig {
     id: Copper.LayerId;
@@ -22,13 +25,6 @@ export interface ChannelConfig {
     value: Copper.ChannelValue;
     name: string;
     color: string;  // From CHANNEL_COLORS
-}
-
-export interface LayerChannelState {
-    activeLayer: Copper.LayerId;
-    activeChannel: Copper.ChannelValue;
-    layerVisibility: Record<Copper.LayerId, boolean>;
-    channelVisibility: Record<Copper.LayerId, Record<Copper.ChannelValue, boolean>>;
 }
 
 // ===== Constants =====
@@ -101,36 +97,37 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     // ===== Actions =====
 
     /**
-     * Set the active layer
+     * Set the active layer and sync to NrrdTools
      */
     function setActiveLayer(layerId: Copper.LayerId): void {
         activeLayer.value = layerId;
+        deps.nrrdTools.value?.setActiveLayer(layerId);
     }
 
     /**
-     * Set the active channel
+     * Set the active channel and sync to NrrdTools
      */
     function setActiveChannel(channel: Copper.ChannelValue): void {
         activeChannel.value = channel;
-
+        deps.nrrdTools.value?.setActiveChannel(channel);
     }
 
     /**
-     * Toggle layer visibility
+     * Toggle layer visibility and sync to NrrdTools
      */
     function toggleLayerVisibility(layerId: Copper.LayerId): void {
         const newValue = !layerVisibility.value[layerId];
         layerVisibility.value[layerId] = newValue;
-
+        deps.nrrdTools.value?.setLayerVisible(layerId, newValue);
     }
 
     /**
-     * Toggle channel visibility
+     * Toggle channel visibility and sync to NrrdTools
      */
     function toggleChannelVisibility(layerId: Copper.LayerId, channel: Copper.ChannelValue): void {
         const newValue = !channelVisibility.value[layerId][channel];
         channelVisibility.value[layerId][channel] = newValue;
-
+        deps.nrrdTools.value?.setChannelVisible(layerId, channel, newValue);
     }
 
     /**
@@ -138,7 +135,6 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
      */
     function enableControls(): void {
         controlsEnabled.value = true;
-        console.log('[Phase 7 - Step 10b] Layer/Channel controls enabled');
     }
 
     /**
@@ -149,26 +145,27 @@ export function useLayerChannel(deps: ILayerChannelDeps) {
     }
 
     /**
-     * Sync state from SegmentationManager (called after initialization)
+     * Sync state from NrrdTools (called after initialization)
      */
     function syncFromManager(): void {
+        const tools = deps.nrrdTools.value;
+        if (!tools) return;
 
         // Sync active layer and channel
-        activeLayer.value = mgr.getCurrentLayer();
-        activeChannel.value = mgr.getCurrentChannel() as Copper.ChannelValue;
+        activeLayer.value = tools.getActiveLayer();
+        activeChannel.value = tools.getActiveChannel() as Copper.ChannelValue;
 
         // Sync visibility states
+        const layerVis = tools.getLayerVisibility();
+        const channelVis = tools.getChannelVisibility();
+
         const layers: Copper.LayerId[] = ['layer1', 'layer2', 'layer3'];
-        const channels: Copper.ChannelValue[] = [1, 2, 3, 4, 5, 6, 7, 8] as Copper.ChannelValue[];
-
         layers.forEach(layerId => {
-            layerVisibility.value[layerId] = mgr.isLayerVisible(layerId);
-            channels.forEach(ch => {
-                channelVisibility.value[layerId][ch] = mgr.isChannelVisible(layerId, ch);
-            });
+            layerVisibility.value[layerId] = layerVis[layerId] ?? true;
+            if (channelVis[layerId]) {
+                channelVisibility.value[layerId] = { ...channelVis[layerId] };
+            }
         });
-
-        console.log('[Phase 7 - Step 10b] Synced state from SegmentationManager');
     }
 
     // ===== Return =====

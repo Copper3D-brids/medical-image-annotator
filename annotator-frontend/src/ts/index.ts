@@ -42,6 +42,8 @@ import {
 } from "./types/types";
 
 import { IPaintImage, ICommXYZ, IGUIStates, IGuiParameterSettings, INrrdStates } from "./Utils/segmentation/coreTools/coreType";
+import { CHANNEL_COLORS, CHANNEL_HEX_COLORS } from "./Utils/segmentation/core";
+import type { LayerId, ChannelValue } from "./Utils/segmentation/core";
 
 import "./css/style.css";
 
@@ -76,6 +78,8 @@ export {
   MeshNodeTool,
   throttle,
   removeGuiFolderChilden,
+  CHANNEL_COLORS,
+  CHANNEL_HEX_COLORS,
 };
 
 export type {
@@ -95,4 +99,6 @@ export type {
   IGUIStates,
   IGuiParameterSettings,
   INrrdStates,
+  LayerId,
+  ChannelValue,
 };

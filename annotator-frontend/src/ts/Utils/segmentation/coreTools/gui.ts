@@ -10,6 +10,7 @@ import {
   IGuiParameterSettings
 } from "./coreType";
 import { DragOperator } from "../DragOperator";
+import { CHANNEL_HEX_COLORS } from "../core";
 
 interface IConfigGUI {
   modeFolder: GUI;
@@ -168,17 +169,11 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
   advanceFolder
     .add(configs.gui_states, "layer", ["layer1", "layer2", "layer3"])
     .name("Layer")
-    .onChange((val) => {
-      if (val === "layer1") {
-        configs.gui_states.fillColor = "#00ff00";
-        configs.gui_states.brushColor = "#00ff00";
-      } else if (val === "layer2") {
-        configs.gui_states.fillColor = "#ff0000";
-        configs.gui_states.brushColor = "#ff0000";
-      } else if (val === "layer3") {
-        configs.gui_states.fillColor = "#0000ff";
-        configs.gui_states.brushColor = "#0000ff";
-      }
+    .onChange((_val) => {
+      // Color is determined by the active channel, not the layer
+      const hexColor = CHANNEL_HEX_COLORS[configs.gui_states.activeChannel] || '#00ff00';
+      configs.gui_states.fillColor = hexColor;
+      configs.gui_states.brushColor = hexColor;
     });
 
   advanceFolder

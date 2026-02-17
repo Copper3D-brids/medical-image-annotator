@@ -582,8 +582,8 @@ describe('MaskVolume — Colored Single Rendering', () => {
       channel: 1,
     });
 
-    // A = round(153 * (128/255) * 1.0) ≈ round(76.8) = 77
-    expect(img.data[3]).toBe(Math.round(153 * (128 / 255)));
+    // A = round(255 * (128/255) * 1.0) = 128
+    expect(img.data[3]).toBe(Math.round(255 * (128 / 255)));
   });
 
   it('should be transparent for zero voxels', () => {
@@ -661,14 +661,14 @@ describe('MaskVolume — Blended Rendering', () => {
       mode: RenderMode.BLENDED,
     });
 
-    // Channel 1: Green {r:0, g:255, b:0, a:153} → alpha = (153/255)*1.0*1.0 = 0.6
-    // Channel 2: Red   {r:255, g:0, b:0, a:153} → alpha = 0.6
-    // totalR = 0*0.6 + 255*0.6 = 153
-    // totalG = 255*0.6 + 0*0.6 = 153
+    // Channel 1: Green {r:0, g:255, b:0, a:255} → alpha = (255/255)*1.0*1.0 = 1.0
+    // Channel 2: Red   {r:255, g:0, b:0, a:255} → alpha = 1.0
+    // totalR = 0*1.0 + 255*1.0 = 255
+    // totalG = 255*1.0 + 0*1.0 = 255
     // totalB = 0
-    // totalA = 0.6 + 0.6 = 1.2
-    expect(img.data[0]).toBe(153); // R
-    expect(img.data[1]).toBe(153); // G
+    // totalA = 1.0 + 1.0 = 2.0
+    expect(img.data[0]).toBe(255); // R
+    expect(img.data[1]).toBe(255); // G
     expect(img.data[2]).toBe(0);   // B
     // A = min(255, round(1.2 * 255)) = 255 (clamped)
     expect(img.data[3]).toBe(255);
@@ -684,9 +684,9 @@ describe('MaskVolume — Blended Rendering', () => {
       visibleChannels: [true, true, false], // ch 2 hidden
     });
 
-    // Only channel 1 (Green): totalR = 0, totalG = 153
+    // Only channel 1 (Green): totalR = 0, totalG = 255
     expect(img.data[0]).toBe(0);   // R
-    expect(img.data[1]).toBe(153); // G
+    expect(img.data[1]).toBe(255); // G
   });
 
   it('should be transparent when no channels have data', () => {
@@ -792,8 +792,8 @@ describe('MaskVolume — Opacity Multiplier', () => {
       opacity: 0.5,
     });
 
-    // A = round(153 * 1.0 * 0.5) = round(76.5) = 77
-    expect(img.data[3]).toBe(Math.round(153 * 0.5));
+    // A = round(255 * 1.0 * 0.5) = round(127.5) = 128
+    expect(img.data[3]).toBe(Math.round(255 * 0.5));
   });
 
   it('should scale alpha by opacity in multi mode', () => {

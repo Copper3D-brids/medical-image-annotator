@@ -25,7 +25,6 @@ import emitter from "@/plugins/custom-emitter";
  */
 export interface IDistanceCalculationDeps {
     nrrdTools: Ref<Copper.NrrdTools | undefined>;
-    segmentationManager?: Ref<Copper.SegmentationManager | undefined>;  // Phase 7
     currentCaseName: Ref<string>;
 }
 
@@ -33,7 +32,7 @@ export interface IDistanceCalculationDeps {
  * Composable for distance calculations
  */
 export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
-    const { nrrdTools, segmentationManager, currentCaseName } = deps;
+    const { nrrdTools, currentCaseName } = deps;
 
     /** Distance to Skin in mm */
     const dts = ref(0);
@@ -48,9 +47,6 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
      * Phase 7: Helper to get voxelSpacing - prefers SegmentationManager, falls back to NrrdTools
      */
     const getVoxelSpacing = (): number[] => {
-        if (segmentationManager?.value?.isInitialized()) {
-            return segmentationManager.value.getVoxelSpacing();
-        }
         return nrrdTools.value!.nrrd_states.voxelSpacing;
     };
 
@@ -58,9 +54,6 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
      * Phase 7: Helper to get spaceOrigin - prefers SegmentationManager, falls back to NrrdTools
      */
     const getSpaceOrigin = (): number[] => {
-        if (segmentationManager?.value?.isInitialized()) {
-            return segmentationManager.value.getSpaceOrigin();
-        }
         return nrrdTools.value!.nrrd_states.spaceOrigin;
     };
 

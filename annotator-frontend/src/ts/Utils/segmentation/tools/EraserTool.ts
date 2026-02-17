@@ -1,43 +1,119 @@
 /**
- * EraserTool - Circular eraser implementation
+ * EraserTool - Channel-aware circular eraser implementation
  *
- * Extracted from DrawToolCore.ts:
- * - useEraser / clearArc
+ * Phase 3.5: Updated to only erase pixels matching the active channel color
+ * on the current layer canvas. Other channels/layers are untouched.
  */
 
 import { BaseTool } from "./BaseTool";
+import { MASK_CHANNEL_COLORS } from "../core";
 
 export class EraserTool extends BaseTool {
 
   /**
    * Create the circular eraser function.
-   * Uses recursive clearRect calls to approximate a circular eraser shape.
-   * Returns a function that can be called with (x, y, radius) coordinates.
+   *
+   * Channel-aware: only erases pixels whose RGB matches the active channel's color.
+   * Only operates on the current layer canvas + master canvas.
    */
   createClearArc(): (x: number, y: number, radius: number) => void {
     const clearArc = (x: number, y: number, radius: number) => {
-      const calcWidth = radius - this.ctx.nrrd_states.stepClear;
-      const calcHeight = Math.sqrt(radius * radius - calcWidth * calcWidth);
-      const posX = x - calcWidth;
-      const posY = y - calcHeight;
-      const widthX = 2 * calcWidth;
-      const heightY = 2 * calcHeight;
+      const activeChannel = this.ctx.gui_states.activeChannel || 1;
+      const channelColor = MASK_CHANNEL_COLORS[activeChannel] ?? MASK_CHANNEL_COLORS[1];
 
-      if (this.ctx.nrrd_states.stepClear <= radius) {
-        this.ctx.protectedData.ctxes.drawingLayerMasterCtx.clearRect(
-          posX, posY, widthX, heightY
+      // Determine current layer context
+      const layer = this.ctx.gui_states.layer;
+      let layerCtx: CanvasRenderingContext2D;
+      switch (layer) {
+        case "layer2":
+          layerCtx = this.ctx.protectedData.ctxes.drawingLayerTwoCtx;
+          break;
+        case "layer3":
+          layerCtx = this.ctx.protectedData.ctxes.drawingLayerThreeCtx;
+          break;
+        default:
+          layerCtx = this.ctx.protectedData.ctxes.drawingLayerOneCtx;
+          break;
+      }
+
+      // Calculate bounding box of the eraser circle
+      const x0 = Math.max(0, Math.floor(x - radius));
+      const y0 = Math.max(0, Math.floor(y - radius));
+      const x1 = Math.min(
+        this.ctx.nrrd_states.changedWidth,
+        Math.ceil(x + radius)
+      );
+      const y1 = Math.min(
+        this.ctx.nrrd_states.changedHeight,
+        Math.ceil(y + radius)
+      );
+      const w = x1 - x0;
+      const h = y1 - y0;
+      if (w <= 0 || h <= 0) return;
+
+      // Read current layer pixels in the bounding box
+      const imageData = layerCtx.getImageData(x0, y0, w, h);
+      const pixels = imageData.data;
+      const r2 = radius * radius;
+
+      // Erase pixels matching the active channel color within the circle.
+      // Uses tolerance (±30) to handle anti-aliased edges from canvas path rendering.
+      const TOL = 30;
+      const cr = channelColor.r, cg = channelColor.g, cb = channelColor.b;
+      for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+          const dx = (x0 + px) - x;
+          const dy = (y0 + py) - y;
+          if (dx * dx + dy * dy > r2) continue; // Outside circle
+
+          const idx = (py * w + px) * 4;
+          const pa = pixels[idx + 3];
+
+          // Skip transparent pixels
+          if (pa === 0) continue;
+
+          // Match if RGB is within tolerance of the active channel color
+          const pr = pixels[idx];
+          const pg = pixels[idx + 1];
+          const pb = pixels[idx + 2];
+          if (Math.abs(pr - cr) <= TOL &&
+              Math.abs(pg - cg) <= TOL &&
+              Math.abs(pb - cb) <= TOL) {
+            pixels[idx] = 0;
+            pixels[idx + 1] = 0;
+            pixels[idx + 2] = 0;
+            pixels[idx + 3] = 0;
+          }
+        }
+      }
+
+      // Write modified pixels back to layer canvas
+      layerCtx.putImageData(imageData, x0, y0);
+
+      // Recomposite master from all layer canvases (full alpha;
+      // globalAlpha applied in start() render loop).
+      const masterCtx = this.ctx.protectedData.ctxes.drawingLayerMasterCtx;
+      const fullW = this.ctx.nrrd_states.changedWidth;
+      const fullH = this.ctx.nrrd_states.changedHeight;
+      masterCtx.clearRect(0, 0, fullW, fullH);
+
+      if (this.ctx.gui_states.layerVisibility['layer1']) {
+        masterCtx.drawImage(
+          this.ctx.protectedData.canvases.drawingCanvasLayerOne,
+          0, 0, fullW, fullH
         );
-        this.ctx.protectedData.ctxes.drawingLayerOneCtx.clearRect(
-          posX, posY, widthX, heightY
+      }
+      if (this.ctx.gui_states.layerVisibility['layer2']) {
+        masterCtx.drawImage(
+          this.ctx.protectedData.canvases.drawingCanvasLayerTwo,
+          0, 0, fullW, fullH
         );
-        this.ctx.protectedData.ctxes.drawingLayerTwoCtx.clearRect(
-          posX, posY, widthX, heightY
+      }
+      if (this.ctx.gui_states.layerVisibility['layer3']) {
+        masterCtx.drawImage(
+          this.ctx.protectedData.canvases.drawingCanvasLayerThree,
+          0, 0, fullW, fullH
         );
-        this.ctx.protectedData.ctxes.drawingLayerThreeCtx.clearRect(
-          posX, posY, widthX, heightY
-        );
-        this.ctx.nrrd_states.stepClear += 1;
-        clearArc(x, y, radius);
       }
     };
     return clearArc;

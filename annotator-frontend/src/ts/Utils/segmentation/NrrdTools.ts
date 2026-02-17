@@ -19,7 +19,8 @@ import {
 } from "./coreTools/coreType";
 import { DragOperator } from "./DragOperator";
 import { DrawToolCore } from "./DrawToolCore";
-import { MaskVolume } from "./core";
+import { MaskVolume, CHANNEL_HEX_COLORS } from "./core";
+import type { LayerId, ChannelValue } from "./core";
 
 export class NrrdTools extends DrawToolCore {
   container: HTMLDivElement;
@@ -175,6 +176,92 @@ export class NrrdTools extends DrawToolCore {
     };
   }
 
+  // ── Layer & Channel Management API ─────────────────────────────────────
+
+  /**
+   * Set the active layer and update fillColor/brushColor to match the active channel.
+   */
+  setActiveLayer(layerId: LayerId): void {
+    this.gui_states.layer = layerId;
+    const hexColor = CHANNEL_HEX_COLORS[this.gui_states.activeChannel] || '#00ff00';
+    this.gui_states.fillColor = hexColor;
+    this.gui_states.brushColor = hexColor;
+  }
+
+  /**
+   * Set the active channel (1-8) and update fillColor/brushColor.
+   */
+  setActiveChannel(channel: ChannelValue): void {
+    this.gui_states.activeChannel = channel;
+    const hexColor = CHANNEL_HEX_COLORS[channel] || '#00ff00';
+    this.gui_states.fillColor = hexColor;
+    this.gui_states.brushColor = hexColor;
+  }
+
+  /**
+   * Get the currently active layer id.
+   */
+  getActiveLayer(): LayerId {
+    return this.gui_states.layer as LayerId;
+  }
+
+  /**
+   * Get the currently active channel value.
+   */
+  getActiveChannel(): number {
+    return this.gui_states.activeChannel;
+  }
+
+  /**
+   * Set visibility of a layer and re-render.
+   */
+  setLayerVisible(layerId: LayerId, visible: boolean): void {
+    this.gui_states.layerVisibility[layerId] = visible;
+    this.reloadMasksFromVolume();
+  }
+
+  /**
+   * Check if a layer is visible.
+   */
+  isLayerVisible(layerId: LayerId): boolean {
+    return this.gui_states.layerVisibility[layerId] ?? true;
+  }
+
+  /**
+   * Set visibility of a specific channel within a layer and re-render.
+   */
+  setChannelVisible(layerId: LayerId, channel: ChannelValue, visible: boolean): void {
+    if (this.gui_states.channelVisibility[layerId]) {
+      this.gui_states.channelVisibility[layerId][channel] = visible;
+    }
+    this.reloadMasksFromVolume();
+  }
+
+  /**
+   * Check if a specific channel within a layer is visible.
+   */
+  isChannelVisible(layerId: LayerId, channel: ChannelValue): boolean {
+    return this.gui_states.channelVisibility[layerId]?.[channel] ?? true;
+  }
+
+  /**
+   * Get the full layer visibility map.
+   */
+  getLayerVisibility(): Record<string, boolean> {
+    return { ...this.gui_states.layerVisibility };
+  }
+
+  /**
+   * Get the full channel visibility map.
+   */
+  getChannelVisibility(): Record<string, Record<number, boolean>> {
+    const result: Record<string, Record<number, boolean>> = {};
+    for (const layerId of ['layer1', 'layer2', 'layer3']) {
+      result[layerId] = { ...this.gui_states.channelVisibility[layerId] };
+    }
+    return result;
+  }
+
   /**
    * A initialise function for nrrd_tools
    */
@@ -224,9 +311,9 @@ export class NrrdTools extends DrawToolCore {
     this.invalidateSliceBuffer();
     const [vw, vh, vd] = this.nrrd_states.dimensions;
     this.protectedData.maskData.volumes = {
-      layer1: new MaskVolume(vw, vh, vd, 4),
-      layer2: new MaskVolume(vw, vh, vd, 4),
-      layer3: new MaskVolume(vw, vh, vd, 4),
+      layer1: new MaskVolume(vw, vh, vd, 1),
+      layer2: new MaskVolume(vw, vh, vd, 1),
+      layer3: new MaskVolume(vw, vh, vd, 1),
     };
 
     this.nrrd_states.spaceOrigin = (
@@ -650,9 +737,9 @@ export class NrrdTools extends DrawToolCore {
 
     // Phase 3: Reset MaskVolume storage to 1×1×1 placeholders
     this.protectedData.maskData.volumes = {
-      layer1: new MaskVolume(1, 1, 1, 4),
-      layer2: new MaskVolume(1, 1, 1, 4),
-      layer3: new MaskVolume(1, 1, 1, 4),
+      layer1: new MaskVolume(1, 1, 1, 1),
+      layer2: new MaskVolume(1, 1, 1, 1),
+      layer3: new MaskVolume(1, 1, 1, 1),
     };
 
     // Invalidate reusable slice buffer
@@ -937,9 +1024,9 @@ export class NrrdTools extends DrawToolCore {
     if (this.nrrd_states.dimensions.length === 3) {
       const [w, h, d] = this.nrrd_states.dimensions;
       this.protectedData.maskData.volumes = {
-        layer1: new MaskVolume(w, h, d, 4),
-        layer2: new MaskVolume(w, h, d, 4),
-        layer3: new MaskVolume(w, h, d, 4),
+        layer1: new MaskVolume(w, h, d, 1),
+        layer2: new MaskVolume(w, h, d, 1),
+        layer3: new MaskVolume(w, h, d, 1),
       };
     }
 
@@ -1013,53 +1100,52 @@ export class NrrdTools extends DrawToolCore {
    * @param factor number
    */
   resizePaintArea(factor: number) {
-    /**
-     * clear canvas
-     */
+    const newWidth = Math.floor(this.nrrd_states.originWidth * factor);
+    const newHeight = Math.floor(this.nrrd_states.originHeight * factor);
+    const sizeChanged = newWidth !== this.nrrd_states.changedWidth ||
+                        newHeight !== this.nrrd_states.changedHeight;
 
+    // Always clear display/drawing/origin canvases (needed for contrast updates)
     this.protectedData.canvases.originCanvas.width =
       this.protectedData.canvases.originCanvas.width;
     this.protectedData.canvases.displayCanvas.width =
       this.protectedData.canvases.displayCanvas.width;
     this.protectedData.canvases.drawingCanvas.width =
       this.protectedData.canvases.drawingCanvas.width;
-    this.resetLayerCanvas();
 
-    this.nrrd_states.changedWidth = Math.floor(this.nrrd_states.originWidth * factor);
-    this.nrrd_states.changedHeight = Math.floor(this.nrrd_states.originHeight * factor);
+    if (sizeChanged) {
+      // Only clear and resize layer canvases when size actually changes.
+      // Skipping this avoids the expensive reloadMasksFromVolume() call
+      // during contrast toggle (where size stays the same).
+      this.resetLayerCanvas();
 
-    /**
-     * resize canvas
-     */
-    this.protectedData.canvases.displayCanvas.width =
-      this.nrrd_states.changedWidth;
-    this.protectedData.canvases.displayCanvas.height =
-      this.nrrd_states.changedHeight;
-    this.protectedData.canvases.drawingCanvas.width =
-      this.nrrd_states.changedWidth;
-    this.protectedData.canvases.drawingCanvas.height =
-      this.nrrd_states.changedHeight;
-    this.protectedData.canvases.drawingCanvasLayerMaster.width =
-      this.nrrd_states.changedWidth;
-    this.protectedData.canvases.drawingCanvasLayerMaster.height =
-      this.nrrd_states.changedHeight;
-    this.protectedData.canvases.drawingCanvasLayerOne.width =
-      this.nrrd_states.changedWidth;
-    this.protectedData.canvases.drawingCanvasLayerOne.height =
-      this.nrrd_states.changedHeight;
-    this.protectedData.canvases.drawingCanvasLayerTwo.width =
-      this.nrrd_states.changedWidth;
-    this.protectedData.canvases.drawingCanvasLayerTwo.height =
-      this.nrrd_states.changedHeight;
-    this.protectedData.canvases.drawingCanvasLayerThree.width =
-      this.nrrd_states.changedWidth;
-    this.protectedData.canvases.drawingCanvasLayerThree.height =
-      this.nrrd_states.changedHeight;
+      this.nrrd_states.changedWidth = newWidth;
+      this.nrrd_states.changedHeight = newHeight;
+
+      this.protectedData.canvases.displayCanvas.width = newWidth;
+      this.protectedData.canvases.displayCanvas.height = newHeight;
+      this.protectedData.canvases.drawingCanvas.width = newWidth;
+      this.protectedData.canvases.drawingCanvas.height = newHeight;
+      this.protectedData.canvases.drawingCanvasLayerMaster.width = newWidth;
+      this.protectedData.canvases.drawingCanvasLayerMaster.height = newHeight;
+      this.protectedData.canvases.drawingCanvasLayerOne.width = newWidth;
+      this.protectedData.canvases.drawingCanvasLayerOne.height = newHeight;
+      this.protectedData.canvases.drawingCanvasLayerTwo.width = newWidth;
+      this.protectedData.canvases.drawingCanvasLayerTwo.height = newHeight;
+      this.protectedData.canvases.drawingCanvasLayerThree.width = newWidth;
+      this.protectedData.canvases.drawingCanvasLayerThree.height = newHeight;
+    }
 
     this.redrawDisplayCanvas();
 
-    // Phase 3: Reload masks from MaskVolume instead of paintImages arrays
-    this.reloadMasksFromVolume();
+    if (sizeChanged) {
+      // Phase 3: Reload masks from MaskVolume only when canvas size changed
+      this.reloadMasksFromVolume();
+    } else {
+      // Size unchanged (e.g. contrast toggle): layer canvases still have
+      // valid data, just recomposite to master for the start() render loop.
+      this.compositeAllLayers();
+    }
   }
 
   /**
@@ -1105,44 +1191,7 @@ export class NrrdTools extends DrawToolCore {
   }
 
 
-  /**
-   * Composite all 3 layer canvases to the master display canvas
-   */
-  private compositeAllLayers(): void {
-    const masterCtx = this.protectedData.ctxes.drawingLayerMasterCtx;
-    const width = this.nrrd_states.changedWidth;
-    const height = this.nrrd_states.changedHeight;
-
-    // Clear master canvas
-    masterCtx.clearRect(0, 0, width, height);
-
-    // Composite layer1
-    masterCtx.drawImage(
-      this.protectedData.canvases.drawingCanvasLayerOne,
-      0,
-      0,
-      width,
-      height
-    );
-
-    // Composite layer2
-    masterCtx.drawImage(
-      this.protectedData.canvases.drawingCanvasLayerTwo,
-      0,
-      0,
-      width,
-      height
-    );
-
-    // Composite layer3
-    masterCtx.drawImage(
-      this.protectedData.canvases.drawingCanvasLayerThree,
-      0,
-      0,
-      width,
-      height
-    );
-  }
+  // compositeAllLayers() is inherited from CommToolsData
 
   /**
    * @deprecated Phase 3: Legacy method - use reloadMasksFromVolume instead
@@ -1195,6 +1244,8 @@ export class NrrdTools extends DrawToolCore {
       // redraw the stored data to empty point 1
       this.setEmptyCanvasSize();
       this.protectedData.ctxes.emptyCtx.putImageData(paintedImage.image, 0, 0);
+      // Disable image smoothing to preserve exact RGB channel colors during scaling
+      if (ctx) ctx.imageSmoothingEnabled = false;
       ctx?.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0,

@@ -172,6 +172,13 @@ interface IGUIStates {
   resetZoom: () => void;
   // resetView: () => void;
   // exportMarks: () => void;
+
+  /** Currently active channel (1-8). Channel 0 is transparent/erased. */
+  activeChannel: number;
+  /** Layer visibility state: { layer1: true, layer2: true, layer3: true } */
+  layerVisibility: Record<string, boolean>;
+  /** Per-layer channel visibility: { layer1: { 1: true, ..., 8: true }, ... } */
+  channelVisibility: Record<string, Record<number, boolean>>;
 }
 
 interface IKeyBoardSettings {

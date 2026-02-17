@@ -87,8 +87,6 @@ const pencilFillColor = ref("#00ff00");
 /** Brush color */
 const brushColor = ref("#00ff00");
 
-/** SegmentationManager instance (Phase 7 - Step 10) */
-let segmentationManager: Copper.SegmentationManager | undefined;
 
 /**
  * Radio button configuration for color type selection.
@@ -109,7 +107,6 @@ onMounted(() => {
 
 function manageEmitters() {
   emitter.on("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
-  emitter.on("Core:SegmentationManager", emitterOnSegmentationManager);  // Phase 7 - Step 10
 }
 
 const emitterOnFinishLoadAllCaseImages = (val:
@@ -128,10 +125,6 @@ const emitterOnFinishLoadAllCaseImages = (val:
   commColorPickerDisabled.value = false;
 }
 
-const emitterOnSegmentationManager = (mgr: Copper.SegmentationManager) => {
-  segmentationManager = mgr;
-  console.log('[Phase 7 - Step 10] SegmentationManager received in OperationAdvance');
-}
 
 function toggleColorPickerRadios(val: string | null) {
   if (val === null) return;
@@ -154,7 +147,6 @@ function handleOnColorPicked(color: string) {
 
 onUnmounted(() => {
   emitter.off("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
-  emitter.off("Core:SegmentationManager", emitterOnSegmentationManager);  // Phase 7 - Step 10
 });
 </script>
 

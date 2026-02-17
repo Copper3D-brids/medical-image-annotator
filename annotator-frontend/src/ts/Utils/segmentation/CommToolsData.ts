@@ -121,7 +121,7 @@ export class CommToolsData {
     mainAreaSize: 3,
     dragSensitivity: 75,
     Eraser: false,
-    globalAlpha: 0.7,
+    globalAlpha: 0.6,
     lineWidth: 2,
     color: "#f50a33",
     segmentation: true,
@@ -168,6 +168,13 @@ export class CommToolsData {
       this.resizePaintArea(this.nrrd_states.sizeFoctor);
       this.resetPaintAreaUIPosition();
     },
+    activeChannel: 1,
+    layerVisibility: { layer1: true, layer2: true, layer3: true },
+    channelVisibility: {
+      layer1: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true },
+      layer2: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true },
+      layer3: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true },
+    },
   };
   protectedData: IProtected;
   constructor(container: HTMLElement, mainAreaContainer: HTMLElement) {
@@ -194,9 +201,9 @@ export class CommToolsData {
       maskData: {
         // Volumetric storage (Phase 3 — only storage mechanism)
         volumes: {
-          layer1: new MaskVolume(width, height, depth, 4),
-          layer2: new MaskVolume(width, height, depth, 4),
-          layer3: new MaskVolume(width, height, depth, 4),
+          layer1: new MaskVolume(width, height, depth, 1),
+          layer2: new MaskVolume(width, height, depth, 1),
+          layer3: new MaskVolume(width, height, depth, 1),
         },
       },
       canvases: {
@@ -483,7 +490,13 @@ export class CommToolsData {
     try {
       const volume = this.getCurrentVolume();
       if (volume) {
-        const imageData = volume.getSliceRawImageData(sliceIndex, axis);
+        const dims = volume.getDimensions();
+        const [w, h] = axis === 'z' ? [dims.width, dims.height]
+          : axis === 'y' ? [dims.width, dims.depth]
+          : [dims.height, dims.depth];
+        const imageData = new ImageData(w, h);
+        const channelVis = this.gui_states.channelVisibility[this.gui_states.layer];
+        volume.renderLabelSliceInto(sliceIndex, axis, imageData, channelVis);
         return { index: sliceIndex, image: imageData };
       }
     } catch (err) {
@@ -555,9 +568,15 @@ export class CommToolsData {
       const volume = this.getVolumeForLayer(layer);
       if (!volume) return;
 
-      volume.getSliceRawImageDataInto(sliceIndex, axis, buffer);
+      // Get channel visibility for this layer
+      const channelVis = this.gui_states.channelVisibility[layer];
+
+      // Render label slice at full alpha — globalAlpha applied during compositeAllLayers
+      volume.renderLabelSliceInto(sliceIndex, axis, buffer, channelVis, 1.0);
       this.setEmptyCanvasSize(axis);
       this.protectedData.ctxes.emptyCtx.putImageData(buffer, 0, 0);
+      // Disable image smoothing to preserve exact RGB values during scaling
+      targetCtx.imageSmoothingEnabled = false;
       targetCtx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0, 0, scaledWidth, scaledHeight
@@ -575,5 +594,38 @@ export class CommToolsData {
     this._reusableSliceBuffer = null;
     this._reusableBufferWidth = 0;
     this._reusableBufferHeight = 0;
+  }
+
+  /**
+   * Composite all 3 layer canvases to the master display canvas.
+   * Only draws layers whose visibility is enabled.
+   */
+  compositeAllLayers(): void {
+    const masterCtx = this.protectedData.ctxes.drawingLayerMasterCtx;
+    const width = this.nrrd_states.changedWidth;
+    const height = this.nrrd_states.changedHeight;
+
+    masterCtx.clearRect(0, 0, width, height);
+
+    // Master stores full-alpha composite; globalAlpha is applied once in
+    // start() when drawing master to drawingCtx (single point of control).
+    if (this.gui_states.layerVisibility['layer1']) {
+      masterCtx.drawImage(
+        this.protectedData.canvases.drawingCanvasLayerOne,
+        0, 0, width, height
+      );
+    }
+    if (this.gui_states.layerVisibility['layer2']) {
+      masterCtx.drawImage(
+        this.protectedData.canvases.drawingCanvasLayerTwo,
+        0, 0, width, height
+      );
+    }
+    if (this.gui_states.layerVisibility['layer3']) {
+      masterCtx.drawImage(
+        this.protectedData.canvases.drawingCanvasLayerThree,
+        0, 0, width, height
+      );
+    }
   }
 }
