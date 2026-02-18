@@ -233,7 +233,7 @@ export class MaskVolume {
    * |------|----------|--------|--------|
    * | `z`  | Axial    | width  | height |
    * | `y`  | Coronal  | width  | depth  |
-   * | `x`  | Sagittal | height | depth  |
+   * | `x`  | Sagittal | depth  | height |
    *
    * @param sliceIndex Index along the specified axis.
    * @param axis       `'x'` (sagittal), `'y'` (coronal), or `'z'` (axial).
@@ -362,11 +362,13 @@ export class MaskVolume {
         }
       } else {
         // X-axis: per-pixel inline math
+        // After dimension fix: expectedW = depth (Z), expectedH = height (Y)
+        // j → y (rows), i → z (columns)
         let px = 0;
         for (let j = 0; j < expectedH; j++) {
-          const zOffset = j * height * width * ch;
+          const yOffset = j * width * ch;
           for (let i = 0; i < expectedW; i++) {
-            const baseIdx = zOffset + i * width * ch + sliceIndex * ch;
+            const baseIdx = i * height * width * ch + yOffset + sliceIndex * ch;
             volData[baseIdx] = pixels[px];
             volData[baseIdx + 1] = pixels[px + 1];
             volData[baseIdx + 2] = pixels[px + 2];
@@ -392,10 +394,11 @@ export class MaskVolume {
           jStride = this.bytesPerSlice;
           iStride = ch;
           break;
+        // Sagittal: i iterates over z (depth), j iterates over y (height)
         case 'x':
           baseIndex = sliceIndex * ch + channel;
-          jStride = this.bytesPerSlice;
-          iStride = rowStride;
+          jStride = rowStride;           // j → y
+          iStride = this.bytesPerSlice;  // i → z
           break;
       }
 
@@ -459,12 +462,13 @@ export class MaskVolume {
       }
     } else {
       // X-axis (sagittal): pixels not contiguous, but avoid function call overhead
-      // mapping: (sliceIndex → x, i → y, j → z)
+      // After dimension fix: sliceWidth = depth (Z), sliceHeight = height (Y)
+      // j → y (rows), i → z (columns)
       let px = 0;
       for (let j = 0; j < sliceHeight; j++) {
-        const zOffset = j * height * width * ch;
+        const yOffset = j * width * ch;
         for (let i = 0; i < sliceWidth; i++) {
-          const baseIdx = zOffset + i * width * ch + sliceIndex * ch;
+          const baseIdx = i * height * width * ch + yOffset + sliceIndex * ch;
           pixels[px] = volData[baseIdx];
           pixels[px + 1] = volData[baseIdx + 1];
           pixels[px + 2] = volData[baseIdx + 2];
@@ -531,11 +535,13 @@ export class MaskVolume {
         px += rowBytes;
       }
     } else {
+      // X-axis (sagittal): sliceWidth = depth (Z), sliceHeight = height (Y)
+      // j → y (rows), i → z (columns)
       let px = 0;
       for (let j = 0; j < sliceHeight; j++) {
-        const zOffset = j * height * width * ch;
+        const yOffset = j * width * ch;
         for (let i = 0; i < sliceWidth; i++) {
-          const baseIdx = zOffset + i * width * ch + sliceIndex * ch;
+          const baseIdx = i * height * width * ch + yOffset + sliceIndex * ch;
           pixels[px] = volData[baseIdx];
           pixels[px + 1] = volData[baseIdx + 1];
           pixels[px + 2] = volData[baseIdx + 2];
@@ -613,10 +619,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = nch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * nch;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 
@@ -724,10 +731,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = ch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * ch;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 
@@ -934,10 +942,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = nch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * nch;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 
@@ -968,7 +977,9 @@ export class MaskVolume {
     switch (axis) {
       case 'z': return [width, height];
       case 'y': return [width, depth];
-      case 'x': return [height, depth];
+      // Sagittal: canvas width = Z (depth), canvas height = Y (height)
+      // Matches Three.js originCanvas layout and setEmptyCanvasSize('x')
+      case 'x': return [depth, height];
     }
   }
 
@@ -1023,10 +1034,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = nch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * nch + channel;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 
@@ -1078,10 +1090,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = nch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * nch + channel;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 
@@ -1137,10 +1150,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = nch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * nch;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 
@@ -1210,10 +1224,11 @@ export class MaskVolume {
         jStride = this.bytesPerSlice;
         iStride = nch;
         break;
+      // Sagittal: i iterates over z (depth), j iterates over y (height)
       case 'x':
         baseIndex = sliceIndex * nch;
-        jStride = this.bytesPerSlice;
-        iStride = rowStride;
+        jStride = rowStride;           // j → y
+        iStride = this.bytesPerSlice;  // i → z
         break;
     }
 

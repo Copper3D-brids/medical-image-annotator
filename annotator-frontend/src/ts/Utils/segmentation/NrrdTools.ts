@@ -275,12 +275,24 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.allSlicesArray = [...allSlices];
 
     const randomSlice = this.protectedData.allSlicesArray[0];
-    this.nrrd_states.nrrd_x_pixel = randomSlice.z.canvas.width;
-    this.nrrd_states.nrrd_y_pixel = randomSlice.z.canvas.height;
-    this.nrrd_states.nrrd_z_pixel = randomSlice.x.canvas.width;
-    this.nrrd_states.nrrd_x_mm = randomSlice.x.volume.dimensions[0];
-    this.nrrd_states.nrrd_y_mm = randomSlice.x.volume.dimensions[1];
-    this.nrrd_states.nrrd_z_mm = randomSlice.x.volume.dimensions[2];
+    this.nrrd_states.nrrd_x_mm = randomSlice.z.canvas.width;
+    this.nrrd_states.nrrd_y_mm = randomSlice.z.canvas.height;
+    this.nrrd_states.nrrd_z_mm = randomSlice.x.canvas.width;
+    this.nrrd_states.nrrd_x_pixel = randomSlice.x.volume.dimensions[0];
+    this.nrrd_states.nrrd_y_pixel = randomSlice.x.volume.dimensions[1];
+    this.nrrd_states.nrrd_z_pixel = randomSlice.x.volume.dimensions[2];
+
+    console.log(this.nrrd_states.nrrd_x_pixel);
+    console.log(this.nrrd_states.nrrd_y_pixel);
+    console.log(this.nrrd_states.nrrd_z_pixel);
+    console.log(this.nrrd_states.nrrd_x_mm);
+    console.log(this.nrrd_states.nrrd_y_mm);
+    console.log(this.nrrd_states.nrrd_z_mm);
+    console.log(randomSlice.x.volume.spacing);
+    console.log(randomSlice.y.volume.spacing);
+    console.log(randomSlice.z.volume.spacing);
+    console.log(randomSlice);
+
 
 
 
@@ -341,8 +353,8 @@ export class NrrdTools extends DrawToolCore {
     imageData: ImageData
   ) {
     let imageDataLable = this.protectedData.ctxes.emptyCtx.createImageData(
-      this.nrrd_states.nrrd_x_mm,
-      this.nrrd_states.nrrd_y_mm
+      this.nrrd_states.nrrd_x_pixel,
+      this.nrrd_states.nrrd_y_pixel
     );
     this.setEmptyCanvasSize();
     for (let j = 0; j < masks[index].data.length; j++) {
@@ -369,8 +381,8 @@ export class NrrdTools extends DrawToolCore {
       const len = masksData["layer1"].length;
       for (let i = 0; i < len; i++) {
         let imageData = this.protectedData.ctxes.emptyCtx.createImageData(
-          this.nrrd_states.nrrd_x_mm,
-          this.nrrd_states.nrrd_y_mm
+          this.nrrd_states.nrrd_x_pixel,
+          this.nrrd_states.nrrd_y_pixel
         );
         let imageDataLayer1, imageDataLayer2, imageDataLayer3;
         if (masksData["layer1"][i].data.length > 0) {
@@ -869,6 +881,9 @@ export class NrrdTools extends DrawToolCore {
 
       this.protectedData.canvases.originCanvas =
         this.protectedData.mainPreSlices.canvas;
+      
+      console.log("origin canvas w:",this.protectedData.canvases.originCanvas.width);
+      
 
       this.updateOriginAndChangedWH();
     }
@@ -1151,21 +1166,21 @@ export class NrrdTools extends DrawToolCore {
     switch (!!axis ? axis : this.protectedData.axis) {
       case "x":
         this.protectedData.canvases.emptyCanvas.width =
-          this.nrrd_states.nrrd_z_mm;
+          this.nrrd_states.nrrd_z_pixel;
         this.protectedData.canvases.emptyCanvas.height =
-          this.nrrd_states.nrrd_y_mm;
+          this.nrrd_states.nrrd_y_pixel;
         break;
       case "y":
         this.protectedData.canvases.emptyCanvas.width =
-          this.nrrd_states.nrrd_x_mm;
+          this.nrrd_states.nrrd_x_pixel;
         this.protectedData.canvases.emptyCanvas.height =
-          this.nrrd_states.nrrd_z_mm;
+          this.nrrd_states.nrrd_z_pixel;
         break;
       case "z":
         this.protectedData.canvases.emptyCanvas.width =
-          this.nrrd_states.nrrd_x_mm;
+          this.nrrd_states.nrrd_x_pixel;
         this.protectedData.canvases.emptyCanvas.height =
-          this.nrrd_states.nrrd_y_mm;
+          this.nrrd_states.nrrd_y_pixel;
         break;
     }
   }

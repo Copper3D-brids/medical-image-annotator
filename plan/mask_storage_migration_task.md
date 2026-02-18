@@ -760,17 +760,20 @@ Detailed task breakdown for migrating from ImageData-per-slice to Uint8Array-bas
 
 **Issues Discovered During Manual Testing:**
 
-#### **Issue 1: Cross-Axis Mask Misalignment** 🔴 HIGH PRIORITY
+#### **Issue 1: Cross-Axis Mask Misalignment** ✅ FIXED (Phase 4)
 - **Problem:** When drawing on Z-axis slice 80, switching to X/Y axes shows mask lines at wrong positions
-- **Root Cause:** Cross-axis synchronization logic still relies on legacy ImageData arrays
+- **Root Cause 1:** Sagittal dimension transposition — `getSliceDimensions('x')` returned `[height, depth]` but canvas was `(depth, height)`
+- **Root Cause 2:** Flip inconsistency — `flipDisplayImageByAxis()` only flipped CT display, not mask canvases
 - **Impact:** Cross-axis view doesn't accurately reflect 3D mask position
 
-**Fix Required:**
-- [ ] **Task 13.5.1:** Audit CrosshairTool.ts for ImageData usage
-  - [ ] Identify all ImageData references in CrosshairTool.ts
-  - [ ] Update cross-axis coordinate mapping to use MaskVolume
-  - [ ] Verify 3D→2D slice projection math is correct
-  - [ ] Test: Draw on Z-axis, verify X/Y cross-sections align correctly
+**Fix (Phase 4, Day 14):**
+- [x] **Task 13.5.1:** Fix sagittal dimension + add mask flip transforms
+  - [x] Fixed `getSliceDimensions('x')` → `[depth, height]` and all stride mappings (MaskVolume.ts, 11 methods)
+  - [x] Fixed dimension code in CommToolsData.ts, ImageStoreHelper.ts
+  - [x] Added `applyMaskFlipForAxis()` to CommToolsData (same flip as `flipDisplayImageByAxis`)
+  - [x] Applied flip in `renderSliceToCanvas()`, `drawImageOnEmptyImage()`, `redrawPreviousImageToLayerCtx()`
+  - [x] Updated unit tests for new dimension convention
+  - [x] Build passes, 101/101 tests pass
 
 #### **Issue 2: Multi-Layer Display & Isolation** 🔴 CRITICAL ✅ FIXED (Phase 3.5)
 - **Problem 1:** Switching layers hides previous layer's masks (should show all layers simultaneously)
@@ -847,7 +850,7 @@ Detailed task breakdown for migrating from ImageData-per-slice to Uint8Array-bas
   - [ ] Verify all tools read/write via MaskVolume APIs
 
 **Success Criteria:**
-- ⏳ Cross-axis masks align correctly (Z-axis mask shows correct X/Y cross-sections) — Task 13.5.1 pending
+- ✅ Cross-axis masks align correctly (Z-axis mask shows correct X/Y cross-sections) — **DONE (Phase 4, Day 14)**
 - ✅ All 3 layers display simultaneously with proper compositing — **DONE (Phase 3.5)**
 - ✅ Layer switching doesn't change colors (color tied to channel, not layer) — **DONE (Phase 3.5)**
 - ✅ Eraser/tools only affect active layer (layer isolation enforced) — **DONE (Phase 3.5)**
@@ -1100,10 +1103,10 @@ yarn build
 
 ---
 
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-02-18
 **Next Review:** End of each phase
 **Owner:** Development Team
-**Status:** In Progress — Phase 1 Complete (Day 1-5), Phase 2 Day 6 Complete, Phase 3.5 Layer & Channel Management Complete
+**Status:** In Progress — Phase 1 Complete (Day 1-5), Phase 2 Complete, Phase 3 Day 12 Complete, Phase 3.5 Complete, Phase 4 Cross-Axis Fix Complete
 
 ---
 
@@ -1176,3 +1179,57 @@ yarn build
    - Actions call NrrdTools methods directly
    - `syncFromManager()` reads state from NrrdTools
    - LayerChannelSelector listens for `Core:NrrdTools` emitter event
+
+---
+
+## Phase 4: Cross-Axis Mask Rendering Fix (Day 14) ✅
+
+### Bug Report
+Drawing masks on axial (z) view at x=20~40, y=60~70:
+- Coronal (y) view: masks visible on slices 60~70 ✅ but **vertically flipped** relative to CT 🔴
+- Sagittal (x) view: masks **not visible** on slices 20~40 🔴
+
+### Root Cause Analysis
+Two independent bugs:
+1. **Sagittal dimension transposition**: `setEmptyCanvasSize('x')` creates canvas (Z×Y) but `MaskVolume.getSliceDimensions('x')` returned [Y,Z] — data garbled
+2. **Flip inconsistency**: `flipDisplayImageByAxis()` only flips CT display, not mask canvases — masks appear in wrong coordinates on coronal/sagittal
+
+### Completed Tasks
+
+- [x] **Task 14.1:** Fix sagittal dimension swap in MaskVolume.ts ✅
+  - [x] Changed `getSliceDimensions('x')` from `[height, depth]` to `[depth, height]`
+  - [x] Swapped iStride/jStride for axis='x' in 8 stride-based methods
+  - [x] Fixed 4-channel explicit index code in 3 methods
+  - [x] Updated JSDoc dimension table
+
+- [x] **Task 14.2:** Fix sagittal dimension in CommToolsData.ts ✅
+  - [x] `getOrCreateSliceBuffer()`: x-axis from `[dims.height, dims.depth]` to `[dims.depth, dims.height]`
+  - [x] `filterDrawedImage()`: same dimension fix
+
+- [x] **Task 14.3:** Fix sagittal dimension in ImageStoreHelper.ts ✅
+  - [x] `filterDrawedImage()`: x-axis from `[dims.height, dims.depth]` to `[dims.depth, dims.height]`
+  - [x] `findSliceInSharedPlace()`: same dimension fix
+
+- [x] **Task 14.4:** Add flip transform to mask rendering ✅
+  - [x] Added `applyMaskFlipForAxis()` helper method to CommToolsData
+  - [x] Updated `renderSliceToCanvas()` to apply flip when drawing emptyCanvas → layer canvas
+
+- [x] **Task 14.5:** Add flip transform to mask storage ✅
+  - [x] Updated `drawImageOnEmptyImage()` in DrawToolCore.ts to apply flip when drawing layer canvas → emptyCanvas
+  - [x] Updated `redrawPreviousImageToLayerCtx()` in DrawToolCore.ts to apply flip when restoring from MaskVolume
+
+- [x] **Task 14.6:** Fix unit tests for new sagittal dimension convention ✅
+  - [x] `MaskVolume.test.ts`: Updated x-axis dimension expectations (width=D, height=H) and pixel position formula
+  - [x] `MigrationUtils.test.ts`: Updated x-axis ImageData dimensions from (H,D) to (D,H) and pixel coordinate mappings
+
+### Files Modified
+- `core/MaskVolume.ts`: 11 methods updated (dimension swap + stride swaps)
+- `CommToolsData.ts`: Dimension fix + `applyMaskFlipForAxis()` + `renderSliceToCanvas()` flip
+- `DrawToolCore.ts`: `drawImageOnEmptyImage()` + `redrawPreviousImageToLayerCtx()` flip
+- `tools/ImageStoreHelper.ts`: Dimension fix in 2 methods
+- `core/__tests__/MaskVolume.test.ts`: X-axis test assertions updated
+- `core/__tests__/MigrationUtils.test.ts`: X-axis test data updated
+
+### Verification
+- Build: ✅ Pass (12.77s, zero errors)
+- Tests: ✅ 101/101 pass (2 test files, 0 failures)

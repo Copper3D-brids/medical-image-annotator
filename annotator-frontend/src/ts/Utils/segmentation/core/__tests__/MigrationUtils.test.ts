@@ -107,11 +107,11 @@ describe('convertIPaintImagesToVolume', () => {
     it('should import X-axis slices correctly', () => {
       const paintImages = emptyPaintImages();
 
-      // X-axis slice at x=4, pixel (3,2) maps to volume (x=4, y=3, z=2)
-      // X-axis slice dimensions: height=10, depth=5 (height × depth)
+      // X-axis slice at x=4, pixel (2,3) maps to volume (x=4, y=3, z=2)
+      // X-axis slice dimensions: depth=5, height=10 (depth × height)
       paintImages.x.push({
         index: 4,
-        image: createImageData(10, 5, [{ x: 3, y: 2, value: 100 }]),
+        image: createImageData(5, 10, [{ x: 2, y: 3, value: 100 }]),
       });
 
       const volume = convertIPaintImagesToVolume(paintImages, DIMS);
@@ -192,7 +192,7 @@ describe('convertIPaintImagesToVolume', () => {
       });
       paintImages.x.push({
         index: 7,
-        image: createImageData(10, 5, [{ x: 4, y: 3, value: 30 }]),
+        image: createImageData(5, 10, [{ x: 3, y: 4, value: 30 }]),
       });
 
       const volume = convertIPaintImagesToVolume(paintImages, DIMS);

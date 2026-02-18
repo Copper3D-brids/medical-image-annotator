@@ -491,7 +491,8 @@ export class CommToolsData {
         const dims = volume.getDimensions();
         const [w, h] = axis === 'z' ? [dims.width, dims.height]
           : axis === 'y' ? [dims.width, dims.depth]
-            : [dims.height, dims.depth];
+            // Sagittal: width = depth (Z), height = height (Y)
+            : [dims.depth, dims.height];
         const imageData = new ImageData(w, h);
         const channelVis = this.gui_states.channelVisibility[this.gui_states.layer];
         volume.renderLabelSliceInto(sliceIndex, axis, imageData, channelVis);
@@ -520,7 +521,9 @@ export class CommToolsData {
       const [w, h] =
         axis === "z" ? [dims.width, dims.height] :
           axis === "y" ? [dims.width, dims.depth] :
-            [dims.height, dims.depth];
+            // Sagittal: width = depth (Z), height = height (Y)
+            // Matches setEmptyCanvasSize('x') and MaskVolume.getSliceDimensions('x')
+            [dims.depth, dims.height];
 
       if (
         !this._reusableSliceBuffer ||
@@ -573,12 +576,17 @@ export class CommToolsData {
       volume.renderLabelSliceInto(sliceIndex, axis, buffer, channelVis, 1.0);
       this.setEmptyCanvasSize(axis);
       this.protectedData.ctxes.emptyCtx.putImageData(buffer, 0, 0);
-      // Disable image smoothing to preserve exact RGB values during scaling
+      // Apply the same display flip to the mask so it aligns with the CT image.
+      // MaskVolume stores data in true volume coordinates; the flip converts
+      // volume coordinates → display coordinates (matching flipDisplayImageByAxis).
+      targetCtx.save();
       targetCtx.imageSmoothingEnabled = false;
+      this.applyMaskFlipForAxis(targetCtx, scaledWidth, scaledHeight, axis);
       targetCtx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0, 0, scaledWidth, scaledHeight
       );
+      targetCtx.restore();
     } catch (err) {
       // Slice out of bounds or volume not ready — skip silently
     }
@@ -592,6 +600,40 @@ export class CommToolsData {
     this._reusableSliceBuffer = null;
     this._reusableBufferWidth = 0;
     this._reusableBufferHeight = 0;
+  }
+
+  /**
+   * Apply the same flip transform used by flipDisplayImageByAxis() to any
+   * canvas context.  This ensures mask overlays align with the flipped CT image.
+   *
+   * The flip is its own inverse (applying twice = identity), so it works for
+   * both directions: volume→display (rendering) and display→volume (storing).
+   *
+   * @param ctx    Target 2D context (must be wrapped in save/restore by caller).
+   * @param width  Canvas width in pixels.
+   * @param height Canvas height in pixels.
+   * @param axis   Current viewing axis.
+   */
+  applyMaskFlipForAxis(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    axis: "x" | "y" | "z",
+  ): void {
+    switch (axis) {
+      case "x": // sagittal: flip both axes
+        ctx.scale(-1, -1);
+        ctx.translate(-width, -height);
+        break;
+      case "y": // coronal: flip vertically
+        ctx.scale(1, -1);
+        ctx.translate(0, -height);
+        break;
+      case "z": // axial: flip vertically
+        ctx.scale(1, -1);
+        ctx.translate(0, -height);
+        break;
+    }
   }
 
   /**

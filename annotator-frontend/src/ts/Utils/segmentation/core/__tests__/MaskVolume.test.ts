@@ -271,15 +271,15 @@ describe('MaskVolume — Slice Extraction', () => {
   describe('X-axis (sagittal)', () => {
     it('should return ImageData with correct dimensions', () => {
       const img = vol.getSliceImageData(0, 'x');
-      expect(img.width).toBe(H);
-      expect(img.height).toBe(D);
+      expect(img.width).toBe(D);
+      expect(img.height).toBe(H);
     });
 
     it('should read voxel values into the slice', () => {
       vol.setVoxel(4, 2, 1, 160);
       const img = vol.getSliceImageData(4, 'x');
-      // x-axis slice: i→y, j→z → pixel(2, 1)
-      const px = (1 * H + 2) * 4;
+      // x-axis slice: i→z, j→y → pixel(1, 2)
+      const px = (2 * D + 1) * 4;
       expect(img.data[px]).toBe(160);
     });
 

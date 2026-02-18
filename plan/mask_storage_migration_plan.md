@@ -1008,7 +1008,62 @@ Adds layer visibility controls, 8-channel-per-layer annotation support with dist
 
 ---
 
-**Last Updated:** 2026-02-15
-**Status:** Phase 3.5 Implemented
+---
+
+## Phase 4: Cross-Axis Mask Rendering Fix
+
+### Overview
+Fixed two critical bugs causing masks drawn on axial view to not render correctly on sagittal/coronal views:
+
+1. **Sagittal dimension transposition** — `getSliceDimensions('x')` returned `[height, depth]` but `setEmptyCanvasSize('x')` created a canvas with `(depth, height)`. The mismatch caused mask data to be garbled when read/written for sagittal slices.
+2. **Flip inconsistency** — `flipDisplayImageByAxis()` applied scale transforms to the CT display canvas only, but mask canvases were rendered/stored without the same flip. This caused coronal masks to appear vertically flipped relative to the CT image.
+
+### Bug 1: Sagittal Dimension Fix
+
+**Root cause:** The x-axis dimension convention was inconsistent between `setEmptyCanvasSize('x')` (canvas = Z×Y) and `MaskVolume.getSliceDimensions('x')` (returned [Y, Z]).
+
+**Fix:** Changed `getSliceDimensions('x')` from `[height, depth]` to `[depth, height]` and swapped all stride mappings (iStride/jStride) for axis='x' across 11 methods in MaskVolume.ts. Updated matching dimension code in CommToolsData.ts and ImageStoreHelper.ts.
+
+**Dimension convention (corrected):**
+
+| Axis | Canvas Width | Canvas Height | i iterates | j iterates |
+|------|-------------|---------------|-----------|-----------|
+| z (axial) | width (X) | height (Y) | X | Y |
+| y (coronal) | width (X) | depth (Z) | X | Z |
+| x (sagittal) | depth (Z) | height (Y) | Z | Y |
+
+### Bug 2: Mask Flip at Render/Store Boundary
+
+**Root cause:** `flipDisplayImageByAxis()` flips the CT display canvas:
+- Axial (z): `scale(1, -1)` — vertical flip
+- Coronal (y): `scale(1, -1)` — vertical flip
+- Sagittal (x): `scale(-1, -1)` — both axes flipped
+
+But mask canvases were drawn without any flip, so masks appeared in screen coordinates while CT was in flipped coordinates.
+
+**Fix (Approach A — flip at boundary):** Added `applyMaskFlipForAxis()` helper to CommToolsData and applied the same flip transform at two boundaries:
+
+1. **Rendering** (MaskVolume → display): In `renderSliceToCanvas()`, apply flip when drawing emptyCanvas → layer canvas
+2. **Storage** (display → MaskVolume): In `drawImageOnEmptyImage()`, apply flip when drawing layer canvas → emptyCanvas
+3. **Reload** (MaskVolume → layer canvas): In `redrawPreviousImageToLayerCtx()`, apply flip when restoring from volume
+
+The flip is self-inverse (applying it twice = identity), so render and storage use the same transform.
+
+### Files Modified
+- `core/MaskVolume.ts`: Dimension swap + stride swaps in 11 methods for x-axis
+- `CommToolsData.ts`: Dimension fix, added `applyMaskFlipForAxis()`, updated `renderSliceToCanvas()`
+- `DrawToolCore.ts`: Updated `drawImageOnEmptyImage()` and `redrawPreviousImageToLayerCtx()` with flip
+- `tools/ImageStoreHelper.ts`: Dimension fix in `filterDrawedImage()` and `findSliceInSharedPlace()`
+- `core/__tests__/MaskVolume.test.ts`: Updated x-axis assertions for new dimension convention
+- `core/__tests__/MigrationUtils.test.ts`: Updated x-axis ImageData dimensions in tests
+
+### Verification
+- Build: Pass (12.77s, zero errors)
+- Tests: 101/101 pass (including updated x-axis tests)
+
+---
+
+**Last Updated:** 2026-02-18
+**Status:** Phase 4 Complete
 **Dependencies:** None
 **Blocks:** Tool Extraction Phase 1

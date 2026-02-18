@@ -99,7 +99,8 @@ export class ImageStoreHelper extends BaseTool {
         const dims = volume.getDimensions();
         const [w, h] = axis === 'z' ? [dims.width, dims.height]
           : axis === 'y' ? [dims.width, dims.depth]
-            : [dims.height, dims.depth];
+            // Sagittal: width = depth (Z), height = height (Y)
+            : [dims.depth, dims.height];
         const imageData = new ImageData(w, h);
         const channelVis = this.ctx.gui_states.channelVisibility[this.ctx.gui_states.layer];
         volume.renderLabelSliceInto(sliceIndex, axis, imageData, channelVis);
@@ -367,7 +368,8 @@ export class ImageStoreHelper extends BaseTool {
     const dims = volume.getDimensions();
     const [w, h] = axis === 'z' ? [dims.width, dims.height]
       : axis === 'y' ? [dims.width, dims.depth]
-        : [dims.height, dims.depth];
+        // Sagittal: width = depth (Z), height = height (Y)
+        : [dims.depth, dims.height];
     const channelVis = this.ctx.gui_states.channelVisibility[this.ctx.gui_states.layer];
 
     // Check previous slices
