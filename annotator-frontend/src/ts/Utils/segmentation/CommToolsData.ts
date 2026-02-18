@@ -576,17 +576,14 @@ export class CommToolsData {
       volume.renderLabelSliceInto(sliceIndex, axis, buffer, channelVis, 1.0);
       this.setEmptyCanvasSize(axis);
       this.protectedData.ctxes.emptyCtx.putImageData(buffer, 0, 0);
-      // Apply the same display flip to the mask so it aligns with the CT image.
-      // MaskVolume stores data in true volume coordinates; the flip converts
-      // volume coordinates → display coordinates (matching flipDisplayImageByAxis).
-      targetCtx.save();
+      // No flip: MaskVolume stores in source coordinates matching the Three.js
+      // slice convention.  Applying a display flip here would invert cross-axis
+      // slice indices (e.g. coronal 220 → 228 for a 448-slice volume).
       targetCtx.imageSmoothingEnabled = false;
-      this.applyMaskFlipForAxis(targetCtx, scaledWidth, scaledHeight, axis);
       targetCtx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0, 0, scaledWidth, scaledHeight
       );
-      targetCtx.restore();
     } catch (err) {
       // Slice out of bounds or volume not ready — skip silently
     }

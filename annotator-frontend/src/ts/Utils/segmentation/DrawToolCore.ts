@@ -613,16 +613,10 @@ export class DrawToolCore extends CommToolsData {
         this.protectedData.previousDrawingImage = tempPreImg;
       }
       this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg!, 0, 0);
-      // Apply display flip so the mask aligns with the flipped CT image.
-      // MaskVolume data is in volume coordinates; flip converts to display coords.
-      ctx.save();
+      // No flip needed: MaskVolume stores in source coordinates (matching the
+      // Three.js / layer canvas convention).  The layer canvas is in screen
+      // coordinates, which already match the source coordinate system.
       ctx.imageSmoothingEnabled = false;
-      this.applyMaskFlipForAxis(
-        ctx,
-        this.nrrd_states.changedWidth,
-        this.nrrd_states.changedHeight,
-        this.protectedData.axis
-      );
       ctx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0,
@@ -630,7 +624,6 @@ export class DrawToolCore extends CommToolsData {
         this.nrrd_states.changedWidth,
         this.nrrd_states.changedHeight
       );
-      ctx.restore();
     };
 
     this.drawingPrameters.handleOnDrawingMouseUp = (e: MouseEvent) => {
@@ -1051,14 +1044,12 @@ export class DrawToolCore extends CommToolsData {
     const w = this.protectedData.canvases.emptyCanvas.width;
     const h = this.protectedData.canvases.emptyCanvas.height;
 
-    // Apply the display flip to convert from screen coordinates to volume
-    // coordinates.  The flip is self-inverse, so the same transform used for
-    // display (flipDisplayImageByAxis) also undoes the visual flip when storing.
-    ctx.save();
+    // No flip needed: the layer canvas screen coordinates already match the
+    // Three.js source coordinate system used by MaskVolume.  Applying a flip
+    // here would invert cross-axis slice indices (e.g. coronal slice 220
+    // becoming 228 when total=448).
     ctx.imageSmoothingEnabled = false;
-    this.applyMaskFlipForAxis(ctx, w, h, this.protectedData.axis);
     ctx.drawImage(canvas, 0, 0, w, h);
-    ctx.restore();
   }
 
   /****************************Sphere functions (delegated to SphereTool)****************************************************/
