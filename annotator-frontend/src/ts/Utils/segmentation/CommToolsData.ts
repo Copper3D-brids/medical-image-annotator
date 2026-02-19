@@ -154,6 +154,9 @@ export class CommToolsData {
     undo: () => {
       this.undoLastPainting();
     },
+    redo: () => {
+      this.redoLastPainting();
+    },
     downloadCurrentMask: () => {
       const config: IDownloadImageConfig = {
         axis: this.protectedData.axis,
@@ -366,6 +369,14 @@ export class CommToolsData {
   undoLastPainting() {
     throw new Error(
       "Child class must implement abstract undoLastPainting, currently you can find it in DrawToolCore."
+    );
+  }
+  /**
+   * Rewrite this {redoLastPainting} function under DrawToolCore
+   */
+  redoLastPainting() {
+    throw new Error(
+      "Child class must implement abstract redoLastPainting, currently you can find it in DrawToolCore."
     );
   }
   /**

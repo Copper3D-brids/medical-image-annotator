@@ -162,6 +162,7 @@ interface IGUIStates {
   clear: () => void;
   clearAll: () => void;
   undo: () => void;
+  redo: () => void;
   downloadCurrentMask: () => void;
   resetZoom: () => void;
   // resetView: () => void;
@@ -271,17 +272,6 @@ interface IDrawOpts {
   getSphereData?: (sphereOrigin: number[], sphereRadius: number) => void;
   getCalculateSpherePositionsData?: (tumourSphereOrigin: ICommXYZ | null, skinSphereOrigin: ICommXYZ | null, ribSphereOrigin: ICommXYZ | null, nippleSphereOrigin: ICommXYZ | null, aixs: "x" | "y" | "z") => void;
 }
-type UndoLayerType = {
-  layer1: Array<HTMLImageElement>;
-  layer2: Array<HTMLImageElement>;
-  layer3: Array<HTMLImageElement>;
-};
-
-interface IUndoType {
-  sliceIndex: number;
-  layers: UndoLayerType;
-}
-
 interface ICursorPage {
   x: {
     cursorPageX: number;
@@ -345,6 +335,9 @@ interface IGuiParameterSettings {
   },
   undo: {
     name: "Undo",
+  },
+  redo: {
+    name: "Redo",
   },
   resetZoom: {
     name: "ResetZoom",
@@ -429,7 +422,6 @@ export {
   ISkipSlicesDictType,
   IMaskData,
   INewMaskData,
-  IUndoType,
   ICursorPage,
   IGuiParameterSettings
 };

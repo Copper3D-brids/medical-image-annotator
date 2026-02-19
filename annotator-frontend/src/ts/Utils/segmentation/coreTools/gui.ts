@@ -99,6 +99,7 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
   actionsFolder.add(configs.gui_states, "clear").name("Clear");
   actionsFolder.add(configs.gui_states, "clearAll").name("ClearAll");
   actionsFolder.add(configs.gui_states, "undo").name("Undo");
+  actionsFolder.add(configs.gui_states, "redo").name("Redo");
   actionsFolder.add(configs.gui_states, "resetZoom").name("ResetZoom");
 
   actionsFolder
@@ -405,6 +406,9 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
     },
     undo: {
       name: "Undo",
+    },
+    redo: {
+      name: "Redo",
     },
     resetZoom: {
       name: "ResetZoom",

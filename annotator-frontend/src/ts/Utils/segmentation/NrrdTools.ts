@@ -700,7 +700,8 @@ export class NrrdTools extends DrawToolCore {
     // To effectively reduce the js memory garbage
     this.protectedData.allSlicesArray.length = 0;
     this.protectedData.displaySlices.length = 0;
-    this.undoArray.length = 0;
+    // Phase 6: Clear all undo/redo stacks
+    this.undoManager.clearAll();
 
     // Phase 3: Reset MaskVolume storage to 1×1×1 placeholders
     this.protectedData.maskData.volumes = {
@@ -932,12 +933,8 @@ export class NrrdTools extends DrawToolCore {
     this.nrrd_states.oldIndex =
       this.protectedData.mainPreSlices.initIndex * this.nrrd_states.RSARatio;
     this.nrrd_states.currentIndex = this.protectedData.mainPreSlices.initIndex;
-    this.undoArray = [
-      {
-        sliceIndex: this.nrrd_states.currentIndex,
-        layers: { layer1: [], layer2: [], layer3: [] },
-      },
-    ];
+    // Phase 6: Reset undo/redo stacks on new dataset load
+    this.undoManager.clearAll();
 
     // compute max index
     this.updateMaxIndex();
@@ -992,6 +989,9 @@ export class NrrdTools extends DrawToolCore {
 
       // Re-init only the active layer's MaskVolume
       this.protectedData.maskData.volumes[activeLayer] = new MaskVolume(w, h, d, 1);
+
+      // Phase 6 Task 6.6: Clear undo/redo stack for this layer (volume too large to snapshot)
+      this.undoManager.clearLayer(activeLayer);
 
       // Phase 3 Task 3.2: Notify external that this layer's volume was cleared
       this.nrrd_states.onClearLayerVolume(activeLayer);

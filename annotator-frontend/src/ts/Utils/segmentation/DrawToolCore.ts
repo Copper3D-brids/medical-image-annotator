@@ -6,7 +6,6 @@ import {
   IPaintImages,
   ICommXY,
   ICommXYZ,
-  IUndoType,
 } from "./coreTools/coreType";
 import { CommToolsData } from "./CommToolsData";
 import { switchEraserSize, switchPencilIcon, throttle } from "../utils";
@@ -18,7 +17,7 @@ import { ZoomTool } from "./tools/ZoomTool";
 import { EraserTool } from "./tools/EraserTool";
 import { ImageStoreHelper } from "./tools/ImageStoreHelper";
 import type { ToolContext } from "./tools/BaseTool";
-import { MaskVolume } from "./core";
+import { UndoManager, MaskDelta } from "./core";
 
 export class DrawToolCore extends CommToolsData {
   container: HTMLElement;
@@ -49,7 +48,12 @@ export class DrawToolCore extends CommToolsData {
 
   eraserUrls: string[] = [];
   pencilUrls: string[] = [];
-  undoArray: Array<IUndoType> = [];
+  undoManager: UndoManager = new UndoManager();
+
+  /** Snapshot of the active layer's slice captured on mouse-down (before drawing). */
+  private preDrawSlice: Uint8Array | null = null;
+  private preDrawAxis: "x" | "y" | "z" = "z";
+  private preDrawSliceIndex: number = 0;
 
   // Centralized event router
   protected eventRouter: EventRouter | null = null;
@@ -172,6 +176,11 @@ export class DrawToolCore extends CommToolsData {
       if ((ev.ctrlKey || ev.metaKey) && ev.key === this.nrrd_states.keyboardSettings.undo) {
         undoFlag = true;
         this.undoLastPainting();
+      }
+
+      // Handle redo (Ctrl+Y or Ctrl+Shift+Z)
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'y' || (ev.shiftKey && ev.key === 'Z'))) {
+        this.redoLastPainting();
       }
 
       // Handle crosshair toggle
@@ -501,6 +510,16 @@ export class DrawToolCore extends CommToolsData {
           this.nrrd_states.drawStartPos.x = e.offsetX;
           this.nrrd_states.drawStartPos.y = e.offsetY;
 
+          // Capture pre-draw slice snapshot for undo
+          try {
+            this.preDrawAxis = this.protectedData.axis;
+            this.preDrawSliceIndex = this.nrrd_states.currentIndex;
+            const vol = this.getVolumeForLayer(this.gui_states.layer);
+            this.preDrawSlice = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis).data.slice();
+          } catch {
+            this.preDrawSlice = null;
+          }
+
           this.protectedData.canvases.drawingCanvas.addEventListener(
             "pointerup",
             this.drawingPrameters.handleOnDrawingMouseUp
@@ -687,28 +706,25 @@ export class DrawToolCore extends CommToolsData {
 
           Is_Painting = false;
 
-          /**
-           * store undo array
-           */
-          const currentUndoObj = this.getCurrentUndo();
-          const src =
-            this.protectedData.canvases.drawingCanvasLayerMaster.toDataURL();
-          const image = new Image();
-          image.src = src;
-          if (currentUndoObj.length > 0) {
-            currentUndoObj[0].layers[
-              this.gui_states.layer as "layer1" | "layer2" | "layer3"
-            ].push(image);
-          } else {
-            const undoObj: IUndoType = {
-              sliceIndex: this.nrrd_states.currentIndex,
-              layers: { layer1: [], layer2: [], layer3: [] },
-            };
-            undoObj.layers[
-              this.gui_states.layer as "layer1" | "layer2" | "layer3"
-            ].push(image);
-            this.undoArray.push(undoObj);
+          // Push delta to UndoManager (new Delta-based undo system)
+          if (this.preDrawSlice) {
+            try {
+              const vol = this.getVolumeForLayer(this.gui_states.layer);
+              const { data: newSlice } = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis);
+              const delta: MaskDelta = {
+                layerId: this.gui_states.layer,
+                axis: this.preDrawAxis,
+                sliceIndex: this.preDrawSliceIndex,
+                oldSlice: this.preDrawSlice,
+                newSlice: newSlice.slice(),
+              };
+              this.undoManager.push(delta);
+            } catch {
+              // Volume not ready — skip
+            }
+            this.preDrawSlice = null;
           }
+
           // add wheel after pointer up
           this.protectedData.canvases.drawingCanvas.addEventListener(
             "wheel",
@@ -1104,19 +1120,14 @@ export class DrawToolCore extends CommToolsData {
     return restLayer;
   }
 
-  /**************************** Undo clear functions****************************************************/
-
-  private getCurrentUndo() {
-    return this.undoArray.filter((item) => {
-      return item.sliceIndex === this.nrrd_states.currentIndex;
-    });
-  }
+  /**************************** Undo/Redo functions (Phase 6 — Delta-based) ****************************/
 
   /**
    * Clear mask on current slice canvas.
    *
    * Phase 2: Clears the MaskVolume slice for all three layers,
    * re-stores, and notifies external via getMask callback with clearFlag=true.
+   * Phase 6: Also records a MaskDelta for undo support.
    */
   clearPaint() {
     this.protectedData.Is_Draw = true;
@@ -1129,26 +1140,40 @@ export class DrawToolCore extends CommToolsData {
     this.protectedData.previousDrawingImage =
       this.protectedData.ctxes.emptyCtx.createImageData(1, 1);
 
-    // Phase 2: Clear volume slices for all layers on the current axis/index
+    // Phase 2 + 6: Clear volume slices and record undo delta
     try {
       const axis = this.protectedData.axis;
       const idx = this.nrrd_states.currentIndex;
+      const activeLayer = this.gui_states.layer;
+      const vol = this.getVolumeForLayer(activeLayer);
+
+      // Capture old slice for undo before clearing
+      const oldSlice = vol.getSliceUint8(idx, axis).data.slice();
+
+      // Clear only the active layer (clear also clears all for canvas consistency)
       const { layer1, layer2, layer3 } = this.protectedData.maskData.volumes;
       layer1.clearSlice(idx, axis);
       layer2.clearSlice(idx, axis);
       layer3.clearSlice(idx, axis);
 
-      // Phase 2 Task 2.1: Notify external that slice was cleared
-      // Extract the cleared (all-zero) slice data and call getMask with clearFlag=true
-      if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere && !this.gui_states.calculator) {
-        const { data: sliceData, width, height } = layer1.getSliceUint8(idx, axis);
-        const activeChannel = this.gui_states.activeChannel || 1;
-        const layer = this.gui_states.layer;
+      // New (all-zero) slice for undo newSlice
+      const { data: newSlice, width, height } = vol.getSliceUint8(idx, axis);
 
-        // Call getMask to notify backend of the clear operation
+      // Push clearPaint delta to UndoManager (supports undo)
+      this.undoManager.push({
+        layerId: activeLayer,
+        axis,
+        sliceIndex: idx,
+        oldSlice,
+        newSlice: newSlice.slice(),
+      });
+
+      // Notify external that slice was cleared
+      if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere && !this.gui_states.calculator) {
+        const activeChannel = this.gui_states.activeChannel || 1;
         this.nrrd_states.getMask(
-          sliceData,
-          layer,
+          newSlice,
+          activeLayer,
           activeChannel,
           idx,
           axis,
@@ -1168,80 +1193,120 @@ export class DrawToolCore extends CommToolsData {
     this.setIsDrawFalse(1000);
   }
 
-  // need to update
+  /**
+   * Undo the last drawing operation on the active layer.
+   * Restores the MaskVolume slice to its pre-draw state, re-renders
+   * the canvas, and notifies the backend.
+   */
   undoLastPainting() {
-    let { ctx, canvas } = this.setCurrentLayer();
-    this.protectedData.Is_Draw = true;
-    this.protectedData.canvases.drawingCanvasLayerMaster.width =
-      this.protectedData.canvases.drawingCanvasLayerMaster.width;
-    canvas.width = canvas.width;
-    this.protectedData.mainPreSlices.repaint.call(
-      this.protectedData.mainPreSlices
-    );
-    const currentUndoObj = this.getCurrentUndo();
-    if (currentUndoObj.length > 0) {
-      const undo = currentUndoObj[0];
-      const layerUndos =
-        undo.layers[this.gui_states.layer as "layer1" | "layer2" | "layer3"];
-      const layerLen = layerUndos.length;
-      // if (layerLen === 0) return;
-      layerUndos.pop();
+    const delta = this.undoManager.undo();
+    if (!delta) return;
 
-      if (layerLen > 0) {
-        // const imageSrc = undo.undos[undo.undos.length - 1];
-        const image = layerUndos[layerLen - 1];
-
-        if (!!image) {
-          ctx.drawImage(
-            image,
-            0,
-            0,
-            this.nrrd_states.changedWidth,
-            this.nrrd_states.changedHeight
-          );
-        }
-      }
-      if (undo.layers.layer1.length > 0) {
-        const image = undo.layers.layer1[undo.layers.layer1.length - 1];
-
-        this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
-          image,
-          0,
-          0,
-          this.nrrd_states.changedWidth,
-          this.nrrd_states.changedHeight
-        );
-      }
-      if (undo.layers.layer2.length > 0) {
-        const image = undo.layers.layer2[undo.layers.layer2.length - 1];
-        this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
-          image,
-          0,
-          0,
-          this.nrrd_states.changedWidth,
-          this.nrrd_states.changedHeight
-        );
-      }
-      if (undo.layers.layer3.length > 0) {
-        const image = undo.layers.layer3[undo.layers.layer3.length - 1];
-        this.protectedData.ctxes.drawingLayerMasterCtx.drawImage(
-          image,
-          0,
-          0,
-          this.nrrd_states.changedWidth,
-          this.nrrd_states.changedHeight
-        );
-      }
-      this.protectedData.previousDrawingImage =
-        this.protectedData.ctxes.drawingLayerMasterCtx.getImageData(
-          0,
-          0,
-          this.protectedData.canvases.drawingCanvasLayerMaster.width,
-          this.protectedData.canvases.drawingCanvasLayerMaster.height
-        );
-      this.storeAllImages(this.nrrd_states.currentIndex, this.gui_states.layer);
-      this.setIsDrawFalse(1000);
+    try {
+      const vol = this.getVolumeForLayer(delta.layerId);
+      vol.setSliceUint8(delta.sliceIndex, delta.oldSlice, delta.axis);
+    } catch {
+      return; // Volume not ready
     }
+
+    this.protectedData.Is_Draw = true;
+
+    if (delta.axis === this.protectedData.axis && delta.sliceIndex === this.nrrd_states.currentIndex) {
+      this.applyUndoRedoToCanvas(delta.layerId);
+    }
+
+    if (!this.nrrd_states.loadMaskJson) {
+      const { data: sliceData, width, height } = this.getVolumeForLayer(delta.layerId)
+        .getSliceUint8(delta.sliceIndex, delta.axis);
+      this.nrrd_states.getMask(
+        sliceData, delta.layerId, this.gui_states.activeChannel || 1,
+        delta.sliceIndex, delta.axis, width, height, false
+      );
+    }
+
+    this.setIsDrawFalse(1000);
+  }
+
+  /**
+   * Redo the last undone operation on the active layer.
+   * Reapplies the MaskVolume slice to its post-draw state, re-renders
+   * the canvas, and notifies the backend.
+   */
+  redoLastPainting() {
+    const delta = this.undoManager.redo();
+    if (!delta) return;
+
+    try {
+      const vol = this.getVolumeForLayer(delta.layerId);
+      vol.setSliceUint8(delta.sliceIndex, delta.newSlice, delta.axis);
+    } catch {
+      return; // Volume not ready
+    }
+
+    this.protectedData.Is_Draw = true;
+
+    if (delta.axis === this.protectedData.axis && delta.sliceIndex === this.nrrd_states.currentIndex) {
+      this.applyUndoRedoToCanvas(delta.layerId);
+    }
+
+    if (!this.nrrd_states.loadMaskJson) {
+      const { data: sliceData, width, height } = this.getVolumeForLayer(delta.layerId)
+        .getSliceUint8(delta.sliceIndex, delta.axis);
+      this.nrrd_states.getMask(
+        sliceData, delta.layerId, this.gui_states.activeChannel || 1,
+        delta.sliceIndex, delta.axis, width, height, false
+      );
+    }
+
+    this.setIsDrawFalse(1000);
+  }
+
+  /**
+   * Re-render a layer canvas from MaskVolume and composite to master.
+   * Called after writing oldSlice/newSlice back to the volume during undo/redo.
+   */
+  private applyUndoRedoToCanvas(layerId: string) {
+    let ctx: CanvasRenderingContext2D;
+    let canvas: HTMLCanvasElement;
+    switch (layerId) {
+      case "layer2":
+        ctx = this.protectedData.ctxes.drawingLayerTwoCtx;
+        canvas = this.protectedData.canvases.drawingCanvasLayerTwo;
+        break;
+      case "layer3":
+        ctx = this.protectedData.ctxes.drawingLayerThreeCtx;
+        canvas = this.protectedData.canvases.drawingCanvasLayerThree;
+        break;
+      default: // "layer1"
+        ctx = this.protectedData.ctxes.drawingLayerOneCtx;
+        canvas = this.protectedData.canvases.drawingCanvasLayerOne;
+    }
+
+    // Clear and re-render the affected layer canvas from MaskVolume
+    canvas.width = canvas.width;
+    const buffer = this.getOrCreateSliceBuffer(this.protectedData.axis);
+    if (buffer) {
+      this.renderSliceToCanvas(
+        layerId,
+        this.protectedData.axis,
+        this.nrrd_states.currentIndex,
+        buffer,
+        ctx,
+        this.nrrd_states.changedWidth,
+        this.nrrd_states.changedHeight
+      );
+    }
+
+    // Re-composite all layers to master
+    this.compositeAllLayers();
+
+    // Update previousDrawingImage from master
+    this.protectedData.previousDrawingImage =
+      this.protectedData.ctxes.drawingLayerMasterCtx.getImageData(
+        0, 0,
+        this.protectedData.canvases.drawingCanvasLayerMaster.width,
+        this.protectedData.canvases.drawingCanvasLayerMaster.height
+      );
   }
 
   /****************************Store images (delegated to ImageStoreHelper)****************************************************/

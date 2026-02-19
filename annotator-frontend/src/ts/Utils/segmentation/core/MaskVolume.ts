@@ -1057,6 +1057,56 @@ export class MaskVolume {
     return { data: result, width: sliceW, height: sliceH };
   }
 
+  /**
+   * Write a 2D slice from a flat Uint8Array back into the volume.
+   *
+   * This is the inverse of {@link getSliceUint8}.  The `data` array must
+   * have exactly `sliceWidth × sliceHeight × channels` bytes.
+   *
+   * @param sliceIndex Index along the specified axis.
+   * @param data       Flat source array (same layout as returned by getSliceUint8).
+   * @param axis       `'x'`, `'y'`, or `'z'` (default `'z'`).
+   *
+   * @throws {RangeError} If sliceIndex is out of bounds.
+   */
+  setSliceUint8(
+    sliceIndex: number,
+    data: Uint8Array,
+    axis: 'x' | 'y' | 'z' = 'z',
+  ): void {
+    this.validateSliceIndex(sliceIndex, axis);
+
+    const [sliceW, sliceH] = this.getSliceDimensions(axis);
+    const nch = this.numChannels;
+    const rowStride = this.dims.width * nch;
+    const volData = this.data;
+
+    if (axis === 'z') {
+      // Contiguous — bulk copy
+      const offset = sliceIndex * this.bytesPerSlice;
+      volData.set(data.subarray(0, sliceW * sliceH * nch), offset);
+    } else if (axis === 'y') {
+      let src = 0;
+      for (let j = 0; j < sliceH; j++) {
+        const rowStart = j * this.dims.height * this.dims.width * nch + sliceIndex * rowStride;
+        volData.set(data.subarray(src, src + this.dims.width * nch), rowStart);
+        src += this.dims.width * nch;
+      }
+    } else {
+      // X-axis (sagittal): sliceW = depth, sliceH = height
+      let src = 0;
+      for (let j = 0; j < sliceH; j++) {
+        const yOffset = j * this.dims.width * nch;
+        for (let i = 0; i < sliceW; i++) {
+          const baseIdx = i * this.dims.height * this.dims.width * nch + yOffset + sliceIndex * nch;
+          for (let ch = 0; ch < nch; ch++) {
+            volData[baseIdx + ch] = data[src++];
+          }
+        }
+      }
+    }
+  }
+
   // ── Private helpers ───────────────────────────────────────────────
 
   /**

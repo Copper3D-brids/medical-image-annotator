@@ -96,3 +96,7 @@ export {
   convertIPaintImagesToVolume,
   convertVolumeToIPaintImages,
 } from './MigrationUtils';
+
+// ── Undo/Redo Manager ──────────────────────────────────────────────────────
+export type { MaskDelta } from './UndoManager';
+export { UndoManager } from './UndoManager';

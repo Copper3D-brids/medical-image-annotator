@@ -4,10 +4,10 @@
 
 前后端 mask 数据实时同步 + Undo/Redo 系统改造的详细任务分解。
 
-> **Status:** Phases 1-5 Completed
+> **Status:** Phases 1-6 Completed
 > **Plan:** [mask_backend_sync_plan.md](mask_backend_sync_plan.md)
 > **Estimated Duration:** 2 weeks
-> **Completed:** Phase 1 (getMask), Phase 2 (clearPaint), Phase 3 (clearStoreImages), Phase 4 (setMasksData), Phase 5 (sendInitMaskToBackend)
+> **Completed:** Phase 1 (getMask), Phase 2 (clearPaint), Phase 3 (clearStoreImages), Phase 4 (setMasksData), Phase 5 (sendInitMaskToBackend), Phase 6 (Undo/Redo)
 
 ---
 
@@ -145,12 +145,12 @@
 
 ---
 
-## Phase 6: Undo/Redo 系统改造
+## Phase 6: Undo/Redo 系统改造 ✅
 
-### Task 6.1: 实现 Delta-based UndoManager
+### Task 6.1: 实现 Delta-based UndoManager ✅
 
-- [ ] 参照 `plan/reference/manager/core/UndoManager.ts`，在项目中实现新的 UndoManager
-- [ ] Delta 结构:
+- [x] 参照 `plan/reference/manager/core/UndoManager.ts`，在项目中实现新的 UndoManager
+- [x] Delta 结构 (`MaskDelta`):
   ```typescript
   interface MaskDelta {
     layerId: string;
@@ -160,60 +160,69 @@
     newSlice: Uint8Array;  // 操作后的 slice 快照
   }
   ```
-- [ ] Per-layer 独立的 undo/redo 栈
-- [ ] maxStackSize: 50
+- [x] Per-layer 独立的 undo/redo 栈
+- [x] maxStackSize: 50
 
-### Task 6.2: 绘制操作的 Undo 记录
+### Task 6.2: 绘制操作的 Undo 记录 ✅
 
-- [ ] 在 `handleOnDrawingMouseDown` 中：记录当前 slice 的快照（oldSlice）
-- [ ] 在 `handleOnDrawingMouseUp` 中：记录操作后的 slice（newSlice）
-- [ ] 将 `{ oldSlice, newSlice, layerId, axis, sliceIndex }` push 到 UndoManager
+- [x] 在 `handleOnDrawingMouseDown` 中：记录当前 slice 的快照（oldSlice）
+- [x] 在 `handleOnDrawingMouseUp` 中：记录操作后的 slice（newSlice）
+- [x] 将 `{ oldSlice, newSlice, layerId, axis, sliceIndex }` push 到 UndoManager
 
-### Task 6.3: Undo 执行逻辑
+### Task 6.3: Undo 执行逻辑 ✅
 
-- [ ] `undoLastPainting()` 改为:
+- [x] `undoLastPainting()` 改为:
   - 从 UndoManager 获取 delta
-  - 将 `oldSlice` 写回 MaskVolume
-  - 重新渲染 canvas
-  - 调用 `getMask` 回调通知后端（实现 undo 后自动同步后端）
+  - 将 `oldSlice` 写回 MaskVolume（via 新增 `MaskVolume.setSliceUint8()`）
+  - 重新渲染 canvas（via `applyUndoRedoToCanvas()`）
+  - 调用 `getMask` 回调通知后端
 
-### Task 6.4: Redo 执行逻辑
+### Task 6.4: Redo 执行逻辑 ✅
 
-- [ ] 新增 `redoLastPainting()` 方法:
+- [x] 新增 `redoLastPainting()` 方法:
   - 从 UndoManager 获取 redo delta
   - 将 `newSlice` 写回 MaskVolume
   - 重新渲染 canvas
   - 调用 `getMask` 回调通知后端
-- [ ] 绑定快捷键 Ctrl+Y 或 Ctrl+Shift+Z
-- [ ] 在 GUI 中暴露 redo 方法
+- [x] 绑定快捷键 Ctrl+Y 和 Ctrl+Shift+Z
+- [x] 在 dat.GUI 面板中暴露 Redo 按钮
 
-### Task 6.5: clearPaint 的 Undo 支持
+### Task 6.5: clearPaint 的 Undo 支持 ✅
 
-- [ ] `clearPaint()` 执行前记录当前 slice 的 oldSlice
-- [ ] 清空后 newSlice 为全零
-- [ ] Push delta 到 UndoManager
-- [ ] Undo clearPaint → 还原 slice → 通知后端
+- [x] `clearPaint()` 执行前记录当前 slice 的 oldSlice
+- [x] 清空后 newSlice 为全零
+- [x] Push delta 到 UndoManager
+- [x] Undo clearPaint → 还原 slice → 通知后端
 
-### Task 6.6: clearStoreImages 的 Undo 处理
+### Task 6.6: clearStoreImages 的 Undo 处理 ✅
 
-- [ ] `clearStoreImages()` 执行时清空当前 layer 的 undo/redo 栈
-- [ ] 不支持 redo（volume 快照太大）
-- [ ] 通知外部 layer volume 被清空
+- [x] `clearStoreImages()` 执行时清空当前 layer 的 undo/redo 栈
+- [x] 不支持 redo（volume 快照太大）
+- [x] 通知外部 layer volume 被清空
 
-### Task 6.7: 移除旧 Undo 系统
+### Task 6.7: 移除旧 Undo 系统 ✅
 
-- [ ] 删除 `IUndoType` 类型定义
-- [ ] 删除 `UndoLayerType` 类型定义
-- [ ] 删除 `undoArray` 属性及相关初始化代码
-- [ ] 删除 `getCurrentUndo()` 方法
-- [ ] 清理所有 `toDataURL()` 相关的 undo 逻辑
+- [x] 删除 `IUndoType` 类型定义
+- [x] 删除 `UndoLayerType` 类型定义
+- [x] 删除 `undoArray` 属性及相关初始化代码（改为 `undoManager: UndoManager`）
+- [x] 删除 `getCurrentUndo()` 方法
+- [x] 清理所有 `toDataURL()` 相关的 undo 逻辑
 
 **完成标准**:
-- Undo (Ctrl+Z) 正确还原绘制操作并同步后端
-- Redo (Ctrl+Y) 正确重做操作并同步后端
-- clearPaint 可 undo
-- clearStoreImages 清空 undo 栈
-- 内存使用有上限（max 50 steps per layer）
+- Undo (Ctrl+Z) 正确还原绘制操作并同步后端 ✅
+- Redo (Ctrl+Y / Ctrl+Shift+Z) 正确重做操作并同步后端 ✅
+- clearPaint 可 undo ✅
+- clearStoreImages 清空 undo 栈 ✅
+- 内存使用有上限（max 50 steps per layer）✅
+- 101 个单元测试全部通过 ✅
+
+**实现细节**:
+- [core/UndoManager.ts](../annotator-frontend/src/ts/Utils/segmentation/core/UndoManager.ts) - 新建 UndoManager 类
+- [core/MaskVolume.ts](../annotator-frontend/src/ts/Utils/segmentation/core/MaskVolume.ts) - 新增 `setSliceUint8()` 方法（`getSliceUint8` 的逆操作）
+- [DrawToolCore.ts](../annotator-frontend/src/ts/Utils/segmentation/DrawToolCore.ts) - 替换整个旧 undo 系统，新增 `undoLastPainting()` / `redoLastPainting()` / `applyUndoRedoToCanvas()`
+- [NrrdTools.ts](../annotator-frontend/src/ts/Utils/segmentation/NrrdTools.ts) - `clearStoreImages()` 清空 layer undo 栈，`afterLoadSlice()` / `clear()` 重置所有栈
+- [coreType.ts](../annotator-frontend/src/ts/Utils/segmentation/coreTools/coreType.ts) - 添加 `redo` 到 `IGUIStates` 和 `IGuiParameterSettings`，移除 `IUndoType` / `UndoLayerType`
+- [gui.ts](../annotator-frontend/src/ts/Utils/segmentation/coreTools/gui.ts) - 添加 Redo 按钮到 dat.GUI 面板
 
 ---
 
