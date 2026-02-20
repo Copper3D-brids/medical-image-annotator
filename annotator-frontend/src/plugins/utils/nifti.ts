@@ -27,8 +27,8 @@ export async function useNiftiReader(niiPath: string): Promise<ArrayBuffer | nul
     // Step 1: Fetch the file from backend as Blob
     const blob = await useSingleFile(niiPath);
 
-    if (!blob || blob === 404) {
-      console.warn(`NIfTI file not found: ${niiPath}`);
+    if (!blob || !(blob instanceof Blob)) {
+      console.warn(`NIfTI file not found or invalid: ${niiPath}`);
       return null;
     }
 
@@ -38,7 +38,6 @@ export async function useNiftiReader(niiPath: string): Promise<ArrayBuffer | nul
     // Step 3: Check if compressed and decompress if needed
     let niftiBuffer = arrayBuffer;
     if (nifti.isCompressed(arrayBuffer)) {
-      console.log(`Decompressing NIfTI file: ${niiPath}`);
       niftiBuffer = nifti.decompress(arrayBuffer);
     }
 

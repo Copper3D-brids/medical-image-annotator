@@ -91,8 +91,8 @@ const currentCaseDetails = ref<IDetails>();
 // Copper refs
 const copperScene = ref<Copper.copperScene>();
 let panelOperator: PanelOperationManager;
-let loadingContainer: HTMLDivElement | undefined;
-let progress: HTMLDivElement | undefined;
+const loadingContainer = ref<HTMLDivElement | undefined>();
+const progress = ref<HTMLDivElement | undefined>();
 
 // Slider settings for NavBar
 const sliderSettingsValue = ref<{
@@ -113,8 +113,8 @@ const models = useRightPanelModels({
 });
 
 const webSocket = useWebSocketSync({
-  loadingContainer: ref(loadingContainer),
-  progress: ref(progress),
+  loadingContainer,
+  progress,
   copperScene,
   currentCaseDetails,
   maskMeshUrl,
@@ -138,8 +138,8 @@ watch(() => props.panelWidth, () => {
 
 // Lifecycle
 onMounted(() => {
-  loadingContainer = rightPanelCoreRef.value?.loadingContainer;
-  progress = rightPanelCoreRef.value?.progress;
+  loadingContainer.value = rightPanelCoreRef.value?.loadingContainer;
+  progress.value = rightPanelCoreRef.value?.progress;
   manageEmitters();
 });
 
@@ -239,11 +239,10 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
   // Get mask GLB if exists
   const glbSize = currentCaseDetails.value?.output.mask_glb_size;
   const maskUrl = currentCaseDetails.value?.output.mask_glb_path;
-  console.log("glbSize:",glbSize);
   
   if (glbSize && Number(glbSize) > 0 && maskUrl) {
     const file = await useSingleFile(maskUrl);
-    if (file) {
+    if (file && file instanceof Blob) {
       maskMeshUrl.value = URL.createObjectURL(file);
     }
   }
@@ -254,7 +253,7 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
 };
 
 const emitterOnSyncTumourModelButtonClicked = () => {
-  switchAnimationStatus(loadingContainer!, progress!, "flex");
+  switchAnimationStatus(loadingContainer.value!, progress.value!, "flex");
   openLoading.value = true;
 };
 

@@ -23,7 +23,7 @@ export async function useSingleFile(path: string, cacheBust: boolean = false) {
         params._t = Date.now();
     }
 
-    const file = http.getBlob<Blob>("/single-file", params);
+    const file = http.getBlob<Blob | number>("/single-file", params);
     return file;
 }
 

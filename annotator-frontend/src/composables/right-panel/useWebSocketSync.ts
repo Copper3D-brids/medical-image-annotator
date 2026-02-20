@@ -94,7 +94,7 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 if (objUrl) {
                     // Use cache busting parameter to get the latest file
                     const file = await useSingleFile(objUrl, true);
-                    if (file) {
+                    if (file && file instanceof Blob) {
                         if (maskMeshUrl.value) {
                             URL.revokeObjectURL(maskMeshUrl.value);
                         }
@@ -120,7 +120,7 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                 if (glbUrl) {
                     // Use cache busting parameter to get the latest file
                     const file = await useSingleFile(glbUrl, true);
-                    if (file) {
+                    if (file && file instanceof Blob) {
                         if (maskMeshUrl.value) {
                             URL.revokeObjectURL(maskMeshUrl.value);
                         }
@@ -135,9 +135,6 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
                     preTumourSphere.value = undefined;
                 }
 
-                console.log(loadingContainer.value);
-                console.log(progress.value);
-                
                 switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
                 openLoading.value = false;
             } else if (data.status === "error" && data.action === "gltf_conversion_error") {
