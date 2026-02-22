@@ -25,7 +25,7 @@ import { useSingleFile } from '../api/cases';
 export async function useNiftiReader(niiPath: string): Promise<ArrayBuffer | null> {
   try {
     // Step 1: Fetch the file from backend as Blob
-    const blob = await useSingleFile(niiPath);
+    const blob = await useSingleFile(niiPath, true);
 
     if (!blob || !(blob instanceof Blob)) {
       console.warn(`NIfTI file not found or invalid: ${niiPath}`);
