@@ -241,7 +241,7 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
   const maskUrl = currentCaseDetails.value?.output.mask_glb_path;
   
   if (glbSize && Number(glbSize) > 0 && maskUrl) {
-    const file = await useSingleFile(maskUrl);
+    const file = await useSingleFile(maskUrl, true);
     if (file && file instanceof Blob) {
       maskMeshUrl.value = URL.createObjectURL(file);
     }
