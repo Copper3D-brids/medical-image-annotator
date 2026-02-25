@@ -171,14 +171,14 @@ export class DrawToolCore extends CommToolsData {
         this.redoLastPainting();
       }
 
-      // Handle crosshair toggle (allowed in drawing tools AND sphere/calculator modes)
+      // Handle crosshair toggle (allowed in drawing tools AND sphere mode)
       if (ev.key === this._keyboardSettings.crosshair) {
         this.eventRouter?.toggleCrosshair();
       }
 
       // Handle draw mode (Shift key) - EventRouter already tracks this
       // EventRouter's handleKeyDown will enforce mutual exclusion
-      if (ev.key === this._keyboardSettings.draw && !this.gui_states.sphere && !this.gui_states.calculator) {
+      if (ev.key === this._keyboardSettings.draw && !this.gui_states.sphere) {
         if (this.eventRouter?.isCtrlHeld()) {
           return; // Ctrl takes priority
         }
@@ -212,9 +212,9 @@ export class DrawToolCore extends CommToolsData {
         }
         // Skip mode toggle when contrast shortcut is disabled
         if (!this.eventRouter?.isContrastEnabled()) return;
-        // Block contrast toggle during crosshair, draw, sphere, or calculator (mutual exclusion)
+        // Block contrast toggle during crosshair, draw, or sphere (mutual exclusion)
         if (this.eventRouter?.isCrosshairEnabled() || this.eventRouter?.getMode() === 'draw') return;
-        if (this.gui_states.sphere || this.gui_states.calculator) return;
+        if (this.gui_states.sphere) return;
         // Toggle contrast mode manually since it's on keyup
         if (this.eventRouter?.getMode() !== 'contrast') {
           this.eventRouter?.setMode('contrast');
@@ -264,70 +264,6 @@ export class DrawToolCore extends CommToolsData {
     this.paintOnCanvas();
   }
 
-  drawCalSphereDown(x: number, y: number, sliceIndex: number, cal_position: "tumour" | "skin" | "nipple" | "ribcage") {
-    this.nrrd_states.sphereRadius = 5
-    this.protectedData.canvases.drawingCanvas.removeEventListener(
-      "wheel",
-      this.drawingPrameters.handleMouseZoomSliceWheel
-    );
-    let mouseX = x / this.nrrd_states.sizeFoctor;
-    let mouseY = y / this.nrrd_states.sizeFoctor;
-
-    //  record mouseX,Y, and enable crosshair function
-    this.nrrd_states.sphereOrigin[this.protectedData.axis] = [
-      mouseX,
-      mouseY,
-      sliceIndex,
-    ];
-    this.setUpSphereOrigins(mouseX, mouseY, sliceIndex);
-    // Note the sphere origin here is x, y, z
-    // x: pixel x, y: pixel y, z: slice index (mm)
-    switch (cal_position) {
-      case "tumour":
-        this.nrrd_states.tumourSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
-        break;
-      case "skin":
-        this.nrrd_states.skinSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
-        break;
-      case "nipple":
-        this.nrrd_states.nippleSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
-        break;
-      case "ribcage":
-        this.nrrd_states.ribSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
-        break;
-    }
-
-    this.nrrd_states.cursorPageX = mouseX;
-    this.nrrd_states.cursorPageY = mouseY;
-    this.enableCrosshair();
-
-    // draw circle setup width/height for sphere canvas
-    this.drawCalculatorSphere(this.nrrd_states.sphereRadius);
-    this.protectedData.canvases.drawingCanvas.addEventListener(
-      "pointerup",
-      this.drawingPrameters.handleOnDrawingMouseUp
-    );
-  }
-
-  drawCalSphereUp() {
-    // Write all placed calculator spheres to volume
-    this.sphereTool.writeAllCalculatorSpheresToVolume();
-    // Render current slice from volume to sphere canvas
-    this.sphereTool.refreshSphereCanvas();
-
-    !!this.nrrd_states.getCalculateSpherePositions &&
-      this.nrrd_states.getCalculateSpherePositions(
-        this.nrrd_states.tumourSphereOrigin,
-        this.nrrd_states.skinSphereOrigin,
-        this.nrrd_states.ribSphereOrigin,
-        this.nrrd_states.nippleSphereOrigin,
-        this.protectedData.axis
-      );
-
-    this.zoomActionAfterDrawSphere();
-    this.protectedData.canvases.drawingCanvas.removeEventListener("pointerup",
-      this.drawingPrameters.handleOnDrawingMouseUp);
-  }
 
   private zoomActionAfterDrawSphere() {
     this.protectedData.canvases.drawingCanvas.addEventListener(
@@ -529,10 +465,6 @@ export class DrawToolCore extends CommToolsData {
         } else if (this.gui_states.sphere && !this.eventRouter?.isCrosshairEnabled()) {
 
           sphere(e)
-
-        } else if (this.gui_states.calculator && !this.eventRouter?.isCrosshairEnabled()) {
-
-          this.drawCalSphereDown(e.offsetX, e.offsetY, this.nrrd_states.currentIndex, this.gui_states.cal_distance)
         }
       } else if (e.button === 2) {
         rightclicked = true;
@@ -572,8 +504,6 @@ export class DrawToolCore extends CommToolsData {
     }
 
     const sphere = (e: MouseEvent) => {
-      // set sphere size
-
       this.protectedData.canvases.drawingCanvas.removeEventListener(
         "wheel",
         this.drawingPrameters.handleMouseZoomSliceWheel
@@ -589,12 +519,29 @@ export class DrawToolCore extends CommToolsData {
       ];
       this.setUpSphereOrigins(mouseX, mouseY, this.nrrd_states.currentIndex);
 
+      // Store origin for the active cal_distance type
+      const calPos = this.gui_states.cal_distance;
+      switch (calPos) {
+        case "tumour":
+          this.nrrd_states.tumourSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
+          break;
+        case "skin":
+          this.nrrd_states.skinSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
+          break;
+        case "nipple":
+          this.nrrd_states.nippleSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
+          break;
+        case "ribcage":
+          this.nrrd_states.ribSphereOrigin = JSON.parse(JSON.stringify(this.nrrd_states.sphereOrigin));
+          break;
+      }
+
       this.nrrd_states.cursorPageX = mouseX;
       this.nrrd_states.cursorPageY = mouseY;
       this.enableCrosshair();
 
       // draw circle setup width/height for sphere canvas
-      this.drawSphere(mouseX, mouseY, this.nrrd_states.sphereRadius);
+      this.drawCalculatorSphere(this.nrrd_states.sphereRadius);
       this.protectedData.canvases.drawingCanvas.addEventListener(
         "wheel",
         this.drawingPrameters.handleSphereWheel,
@@ -702,19 +649,24 @@ export class DrawToolCore extends CommToolsData {
           this.gui_states.sphere &&
           !this.eventRouter?.isCrosshairEnabled()
         ) {
-          // Write 3D solid sphere to sphereMaskVolume
-          if (this.nrrd_states.spherePlanB) {
-            const vol = this.nrrd_states.sphereMaskVolume;
-            if (vol) vol.clear();
-            this.sphereTool.write3DSphereToVolume();
-            // Render current slice from volume to sphere canvas
-            this.sphereTool.refreshSphereCanvas();
-          }
+          // Write all placed calculator spheres to volume
+          this.sphereTool.writeAllCalculatorSpheresToVolume();
+          // Render current slice from volume to sphere canvas
+          this.sphereTool.refreshSphereCanvas();
 
           !!this.nrrd_states.getSphere &&
             this.nrrd_states.getSphere(
               this.nrrd_states.sphereOrigin.z,
               this.nrrd_states.sphereRadius / this.nrrd_states.sizeFoctor
+            );
+
+          !!this.nrrd_states.getCalculateSpherePositions &&
+            this.nrrd_states.getCalculateSpherePositions(
+              this.nrrd_states.tumourSphereOrigin,
+              this.nrrd_states.skinSphereOrigin,
+              this.nrrd_states.ribSphereOrigin,
+              this.nrrd_states.nippleSphereOrigin,
+              this.protectedData.axis
             );
 
           this.protectedData.canvases.drawingCanvas.removeEventListener(
@@ -732,7 +684,9 @@ export class DrawToolCore extends CommToolsData {
             this.drawingPrameters.handleOnDrawingMouseUp
           );
 
-        } else if ((this.gui_states.sphere || this.gui_states.calculator) &&
+          this.zoomActionAfterDrawSphere();
+
+        } else if (this.gui_states.sphere &&
           this.eventRouter?.isCrosshairEnabled()) {
           this.protectedData.canvases.drawingCanvas.addEventListener(
             "wheel",
@@ -742,10 +696,6 @@ export class DrawToolCore extends CommToolsData {
             "pointerup",
             this.drawingPrameters.handleOnDrawingMouseUp
           );
-        } else if (this.gui_states.calculator &&
-          !this.eventRouter?.isCrosshairEnabled()) {
-          // When mouse up
-          this.drawCalSphereUp()
         }
 
       } else if (e.button === 2) {
@@ -760,7 +710,7 @@ export class DrawToolCore extends CommToolsData {
           this.drawingPrameters.handleOnPanMouseMove
         );
 
-        if (this.gui_states.sphere || this.gui_states.calculator) {
+        if (this.gui_states.sphere) {
           this.zoomActionAfterDrawSphere();
         }
       } else {
@@ -891,7 +841,7 @@ export class DrawToolCore extends CommToolsData {
         // Draw sphere overlay from cached sphere canvas (separate from master).
         // During preview: drawSphere/drawCalculatorSphere update the sphere canvas.
         // After placement: refreshSphereCanvas renders from sphereMaskVolume.
-        if (this.gui_states.sphere || this.gui_states.calculator) {
+        if (this.gui_states.sphere) {
           this.protectedData.ctxes.drawingCtx.drawImage(
             this.protectedData.canvases.drawingSphereCanvas,
             0,
@@ -1070,7 +1020,7 @@ export class DrawToolCore extends CommToolsData {
    * Called after view changes (slice switch, zoom, contrast, axis switch).
    */
   refreshSphereOverlay() {
-    if (this.gui_states.sphere || this.gui_states.calculator) {
+    if (this.gui_states.sphere) {
       this.sphereTool.refreshSphereCanvas();
     }
   }
@@ -1146,7 +1096,7 @@ export class DrawToolCore extends CommToolsData {
       });
 
       // Notify external that slice was cleared
-      if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere && !this.gui_states.calculator) {
+      if (!this.nrrd_states.loadMaskJson && !this.gui_states.sphere) {
         const activeChannel = this.gui_states.activeChannel || 1;
         this.nrrd_states.getMask(
           newSlice,

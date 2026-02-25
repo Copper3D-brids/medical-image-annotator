@@ -150,10 +150,10 @@ export class DragSliceTool extends BaseTool {
     this.ctx.protectedData.ctxes.displayCtx.restore();
 
     // Phase 3: Draw ALL layers from MaskVolume (multi-layer compositing)
-    // Skip layer mask rendering when sphere/calculator mode is active —
+    // Skip layer mask rendering when sphere mode is active —
     // layer masks should remain hidden until the user exits sphere mode.
     if (nrrd.switchSliceFlag) {
-      if (!this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
+      if (!this.ctx.gui_states.sphere) {
         const axis = this.ctx.protectedData.axis;
         const sliceIndex = nrrd.currentIndex;
 
@@ -176,7 +176,7 @@ export class DragSliceTool extends BaseTool {
       }
 
       // Refresh sphere overlay from volume for the new slice
-      if (this.ctx.gui_states.sphere || this.ctx.gui_states.calculator) {
+      if (this.ctx.gui_states.sphere) {
         this.callbacks.refreshSphereOverlay?.();
       }
 

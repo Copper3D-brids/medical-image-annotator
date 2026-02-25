@@ -69,12 +69,6 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
       updateGuiSphereState();
     });
   actionsFolder
-    .add(configs.gui_states, "calculator")
-    .name("Calculator")
-    .onChange(() => {
-      updateCalculatorState();
-    });
-  actionsFolder
     .add(configs.gui_states, "brushAndEraserSize")
     .name("BrushAndEraserSize")
     .min(5)
@@ -299,19 +293,6 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
     }
   };
 
-  const updateCalculatorState = () => {
-    if (configs.gui_states.calculator) {
-      // disable mouse to drag slices
-      configs.removeDragMode();
-    } else {
-      // enable mouse to drag slices
-      configs.configDragMode();
-      // clear canvas
-      configs.clearPaint();
-      configs.clearStoreImages();
-    }
-  }
-
   const updateCalDistance = (val: "tumour" | "skin" | "ribcage" | "nipple") => {
     const color = SPHERE_COLORS[val as SphereType];
     configs.gui_states.fillColor = color;
@@ -357,10 +338,6 @@ function setupGui(configs: IConfigGUI): IGuiParameterSettings {
     Eraser: {
       name: "Eraser",
       onChange: updateGuiEraserState,
-    },
-    calculator: {
-      name: "Calculator",
-      onChange: updateCalculatorState,
     },
     cal_distance: {
       name: "CalculatorDistance",

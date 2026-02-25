@@ -63,7 +63,7 @@ export class ImageStoreHelper extends BaseTool {
     // Read from the individual layer canvas (NOT master) to preserve layer isolation
     const layerCanvas = this.getCanvasForLayer(layer);
 
-    if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
+    if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere) {
       this.callbacks.setEmptyCanvasSize();
       this.callbacks.drawImageOnEmptyImage(layerCanvas);
     }
@@ -95,7 +95,7 @@ export class ImageStoreHelper extends BaseTool {
       // Volume not ready — skip
     }
 
-    if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere && !this.ctx.gui_states.calculator) {
+    if (!nrrd.loadMaskJson && !this.ctx.gui_states.sphere) {
       // Extract raw slice data from MaskVolume and notify parent
       try {
         const volume = this.getVolumeForLayer(layer);

@@ -305,8 +305,8 @@ export class SphereTool extends BaseTool {
    * Draw a sphere cross-section at a given decay distance from center,
    * for a specific axis view.
    *
-   * In Plan B mode (spherePlanB = true), this is called for each decay
-   * value [0..sphereRadius] for all 3 axes, creating the 3D sphere effect.
+   * Called for each decay value [0..sphereRadius] for all 3 axes,
+   * creating the 3D sphere effect.
    *
    * The sphere circle radius at each slice = sphereRadius - decay (linear decay).
    *
@@ -495,7 +495,7 @@ export class SphereTool extends BaseTool {
         return {
           x: canvasX * nrrd.nrrd_x_pixel / nrrd.nrrd_x_mm,
           y: sliceIndex,
-          z: canvasY * nrrd.nrrd_z_pixel / nrrd.nrrd_z_mm,
+          z: (nrrd.nrrd_z_mm - canvasY) * nrrd.nrrd_z_pixel / nrrd.nrrd_z_mm,
         };
       case 'x':
         return {
@@ -671,11 +671,20 @@ export class SphereTool extends BaseTool {
       this.callbacks.setEmptyCanvasSize(axis);
       this.ctx.protectedData.ctxes.emptyCtx.putImageData(imageData, 0, 0);
 
-      sphereCtx.imageSmoothingEnabled = false;
+      sphereCtx.imageSmoothingEnabled = true;
+      // Coronal axis ('y') needs vertical flip to match display coordinate system
+      if (axis === 'y') {
+        sphereCtx.save();
+        sphereCtx.scale(1, -1);
+        sphereCtx.translate(0, -sphereCanvas.height);
+      }
       sphereCtx.drawImage(
         this.ctx.protectedData.canvases.emptyCanvas,
         0, 0, sphereCanvas.width, sphereCanvas.height
       );
+      if (axis === 'y') {
+        sphereCtx.restore();
+      }
     } catch {
       // Volume not ready or slice out of bounds
     }

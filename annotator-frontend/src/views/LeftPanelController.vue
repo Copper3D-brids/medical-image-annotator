@@ -217,6 +217,7 @@ const onFinishedCopperInit = (copperInitData: ILeftCoreCopperInit) => {
   // nrrdTools.value.setContrastShortcutEnabled(false)
   // nrrdTools.value.setKeyboardSettings({ mouseWheel: 'Scroll:Slice' });
   // nrrdTools.value.gui_states.sphere = true;
+  nrrdTools.value.gui_states.cal_distance = "skin";
 };
 
 const onOpenDialog = (flag: boolean) => { dialog.value = flag; };

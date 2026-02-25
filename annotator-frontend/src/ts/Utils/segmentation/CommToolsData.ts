@@ -32,7 +32,7 @@ export class CommToolsData {
     redo: "y",
     contrast: ["Control", "Meta"],
     crosshair: "s",
-    sphere: "p",
+    sphere: "q",
     mouseWheel: "Scroll:Zoom",
   };
 
@@ -69,12 +69,11 @@ export class CommToolsData {
     ribSphereOrigin: null,
     nippleSphereOrigin: null,
     tumourColor: "#00ff00",
-    skinColor: "#FFEB3B",
-    ribcageColor: "#2196F3",
-    nippleColor: "#E91E63",
+    skinColor: "#ffff00",
+    ribcageColor: "#0000ff",
+    nippleColor: "#ff00ff",
 
     sphereMaskVolume: null,
-    spherePlanB: true,
     sphereRadius: 5,
     Mouse_Over_x: 0,
     Mouse_Over_y: 0,
@@ -140,7 +139,6 @@ export class CommToolsData {
     layer: "layer1",
     cal_distance: "tumour",
     sphere: false,
-    calculator: false,
     readyToUpdate: true,
     defaultPaintCursor: switchPencilIcon("dot"),
     max_sensitive: 100,

@@ -32,6 +32,7 @@ const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
     redo: 'y',
     contrast: ['Control', 'Meta'],
     crosshair: 'c',
+    sphere: 'q',
     mouseWheel: 'Scroll:Zoom'
 };
 
@@ -223,8 +224,8 @@ export class EventRouter {
     setGuiTool(tool: GuiTool): void {
         this.guiTool = tool;
 
-        // When entering sphere/calculator mode, keep crosshair if active, otherwise idle
-        if (tool === 'sphere' || tool === 'calculator') {
+        // When entering sphere mode, keep crosshair if active, otherwise idle
+        if (tool === 'sphere') {
             if (!this.state.crosshairEnabled) {
                 this.setMode('idle');
             }
@@ -233,12 +234,12 @@ export class EventRouter {
 
     /**
      * Toggle crosshair mode.
-     * Allowed in drawing tools AND sphere/calculator modes.
+     * Allowed in drawing tools AND sphere mode.
      * Blocked when draw or contrast mode is active, or left button is held (mutual exclusion).
      */
     toggleCrosshair(): void {
-        // Allow crosshair in drawing tools and sphere/calculator modes
-        if (!DRAWING_TOOLS.has(this.guiTool) && this.guiTool !== 'sphere' && this.guiTool !== 'calculator') return;
+        // Allow crosshair in drawing tools and sphere mode
+        if (!DRAWING_TOOLS.has(this.guiTool) && this.guiTool !== 'sphere') return;
         // Block crosshair activation during draw, contrast, or while left button held
         if (this.state.shiftHeld || this.state.leftButtonDown || this.mode === 'draw' || this.mode === 'contrast') return;
 
@@ -388,9 +389,9 @@ export class EventRouter {
         }
 
         if (this.contrastEnabled && this.keyboardSettings.contrast.includes(ev.key)) {
-            // Block contrast state when crosshair, draw, sphere, or calculator is active (mutual exclusion)
+            // Block contrast state when crosshair, draw, or sphere is active (mutual exclusion)
             if (!this.state.crosshairEnabled && this.mode !== 'draw'
-                && this.guiTool !== 'sphere' && this.guiTool !== 'calculator') {
+                && this.guiTool !== 'sphere') {
                 this.state.ctrlHeld = true;
             }
         }

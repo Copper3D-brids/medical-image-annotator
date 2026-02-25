@@ -950,14 +950,6 @@ export class NrrdTools extends DrawToolCore {
 
     this.protectedData.axis = axisTo;
     this.resetDisplaySlicesStatus();
-    // for sphere plan a
-    if (this.gui_states.sphere && !this.nrrd_states.spherePlanB) {
-      this.drawSphere(
-        this.nrrd_states.sphereOrigin[axisTo][0] * this.nrrd_states.sizeFoctor,
-        this.nrrd_states.sphereOrigin[axisTo][1] * this.nrrd_states.sizeFoctor,
-        this.nrrd_states.sphereRadius
-      );
-    }
   }
 
   addSkip(index: number) {
@@ -1467,9 +1459,9 @@ export class NrrdTools extends DrawToolCore {
    * Replaces the old reloadMaskToLayer approach
    */
   private reloadMasksFromVolume(): void {
-    // When sphere/calculator mode is active, do NOT redraw layer masks.
+    // When sphere mode is active, do NOT redraw layer masks.
     // Layer mask data should remain hidden until the user exits sphere mode.
-    if (this.gui_states.sphere || this.gui_states.calculator) {
+    if (this.gui_states.sphere) {
       return;
     }
 

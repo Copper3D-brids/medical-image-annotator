@@ -152,7 +152,6 @@ interface IGUIStates {
   layer: string;
   cal_distance: "tumour" | "skin" | "nipple" | "ribcage";
   sphere: boolean;
-  calculator: boolean;
   // subView: boolean;
   // subViewScale: number;
   readyToUpdate: boolean;
@@ -216,10 +215,10 @@ interface INrrdStates {
   skinSphereOrigin: ICommXYZ | null,
   ribSphereOrigin: ICommXYZ | null,
   nippleSphereOrigin: ICommXYZ | null,
-  tumourColor: "#00ff00",
-  skinColor: "#FFEB3B",
-  ribcageColor: "#2196F3",
-  nippleColor: "#E91E63",
+  tumourColor: string,
+  skinColor: string,
+  ribcageColor: string,
+  nippleColor: string,
   /**
    * Dedicated MaskVolume for SphereTool 3D sphere data.
    * Separate from layer volumes to avoid polluting draw mask data.
@@ -227,7 +226,6 @@ interface INrrdStates {
    * Type is `any` here to avoid circular deps (actual type: MaskVolume).
    */
   sphereMaskVolume: any;
-  spherePlanB: boolean;
   sphereRadius: number;
   Mouse_Over_x: number;
   Mouse_Over_y: number;
@@ -322,10 +320,6 @@ interface IGuiParameterSettings {
   },
   Eraser: {
     name: "Eraser",
-    onChange: () => void,
-  },
-  calculator: {
-    name: "Calculator",
     onChange: () => void,
   },
   cal_distance: {

@@ -274,33 +274,45 @@ nrrdTools.draw({
 });
 ```
 
-### 5.3 SphereTool — 3D Sphere Placement
+### 5.3 SphereTool — 3D Sphere Placement & Distance Calculator
 
-The SphereTool provides two modes: **Sphere** (single sphere placement) and **Calculator** (4-type marker placement for AI segmentation).
+The SphereTool provides unified sphere placement with 4 sphere types controlled by `gui_states.cal_distance`. The active type determines which origin and color are used. The old separate "Calculator" mode has been merged into SphereTool.
 
-#### Channel Mapping
+#### Sphere Types & Channel Mapping
 
-Each sphere type maps to a specific channel on layer1:
+Each sphere type maps to a specific channel on layer1. Switch between types using `gui_states.cal_distance`:
 
-| Sphere Type | Channel | Default Color |
-|-------------|---------|---------------|
-| tumour      | 1       | `#00ff00` (green) |
-| ribcage     | 3       | `#2196F3` (blue) |
-| skin        | 4       | `#FFEB3B` (yellow) |
-| nipple      | 5       | `#E91E63` (pink) |
+| Sphere Type | Channel | Default Color | `cal_distance` value |
+|-------------|---------|---------------|---------------------|
+| tumour      | 1       | `#00ff00` (green) | `"tumour"` (default) |
+| ribcage     | 3       | `#0000ff` (blue) | `"ribcage"` |
+| skin        | 4       | `#ffff00` (yellow) | `"skin"` |
+| nipple      | 5       | `#ff00ff` (magenta) | `"nipple"` |
 
 These mappings are exported as `SPHERE_CHANNEL_MAP` and `SPHERE_COLORS` from `tools/SphereTool.ts`.
+
+#### Switching Sphere Type
+
+```typescript
+// Switch to skin sphere type
+gui_states.cal_distance = "skin";
+// The next sphere placed will use channel 4 (yellow)
+// Origin is stored in nrrd_states.skinSphereOrigin
+```
 
 #### Interaction Flow
 
 ```
-Sphere mode activated (gui_states.sphere = true):
+Sphere mode activated (gui_states.sphere = true, keyboard shortcut: 'q'):
   ├─ Shift key DISABLED (no draw mode)
-  ├─ Crosshair toggle DISABLED
+  ├─ Crosshair toggle allowed (S key)
   │
-  ├─ Left-click DOWN → record origin, show preview, bind sphere wheel
+  ├─ Left-click DOWN → record origin for current cal_distance type,
+  │                     show preview, bind sphere wheel
   ├─ Scroll wheel (while holding) → adjust radius [1, 50]
-  └─ Left-click UP → fire callbacks, restore zoom/slice wheel
+  └─ Left-click UP → write all placed spheres to volume,
+                      fire getSphere + getCalculateSpherePositions callbacks,
+                      restore zoom/slice wheel
 ```
 
 #### SphereMaskVolume
@@ -312,20 +324,25 @@ Sphere 3D data is stored in a dedicated `MaskVolume` (`nrrd_states.sphereMaskVol
 
 > **Note**: Currently sphere data does NOT write to layer1's MaskVolume. The channel mapping and `sphereMaskVolume` are reserved for future integration.
 
-#### Scenario: Calculator mode with AI backend
+#### Scenario: Sphere mode with AI backend (distance calculation)
 
 ```typescript
 nrrdTools.draw({
+  // Called on every sphere placement — receives all 4 sphere origins
   getCalculateSpherePositionsData: (tumour, skin, rib, nipple, axis) => {
-    // Send all 4 sphere origins to AI backend
     // Each origin is { x: [mx, my, slice], y: [...], z: [...] } or null
     if (tumour && skin && rib && nipple) {
       aiBackend.runSegmentation({ tumour, skin, rib, nipple, axis });
     }
   },
+  // Also called — receives the current sphere's origin and radius
+  getSphereData: (origin, radius) => {
+    console.log('Sphere placed at', origin, 'radius', radius);
+  },
 });
+```
 
-### 5.3 `enableContrastDragEvents()` — Windowing
+### 5.4 `enableContrastDragEvents()` — Windowing
 
 Enable Ctrl+drag to adjust window/level (brightness/contrast):
 
@@ -581,6 +598,7 @@ window.addEventListener('keydown', (e) => {
 | Redo | `y` |
 | Contrast adjust | `Ctrl` / `Meta` (hold) |
 | Crosshair | `s` |
+| Sphere mode | `q` |
 | Mouse wheel | Zoom |
 
 ### Reading current settings
