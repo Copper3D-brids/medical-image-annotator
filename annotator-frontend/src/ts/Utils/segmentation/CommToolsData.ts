@@ -606,14 +606,24 @@ export class CommToolsData {
       volume.renderLabelSliceInto(sliceIndex, axis, buffer, channelVis, 1.0);
       this.setEmptyCanvasSize(axis);
       this.protectedData.ctxes.emptyCtx.putImageData(buffer, 0, 0);
-      // No flip: MaskVolume stores in source coordinates matching the Three.js
-      // slice convention.  Applying a display flip here would invert cross-axis
-      // slice indices (e.g. coronal 220 → 228 for a 448-slice volume).
       targetCtx.imageSmoothingEnabled = false;
+      // Coronal (axis='y') Z-flip: vertically flip the rendered mask to match
+      // the Z-flip applied during the write path (syncLayerSliceData).
+      // Same pattern as SphereTool.refreshSphereCanvas('y') scale(1,-1).
+      // Same-view: write_flip + read_flip = identity (correct).
+      // Cross-view (sagittal↔coronal): aligns Z-axis direction (fixes flip bug).
+      if (axis === 'y') {
+        targetCtx.save();
+        targetCtx.scale(1, -1);
+        targetCtx.translate(0, -scaledHeight);
+      }
       targetCtx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0, 0, scaledWidth, scaledHeight
       );
+      if (axis === 'y') {
+        targetCtx.restore();
+      }
     } catch (err) {
       // Slice out of bounds or volume not ready — skip silently
     }

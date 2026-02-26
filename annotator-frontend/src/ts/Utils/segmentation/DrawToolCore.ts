@@ -564,10 +564,13 @@ export class DrawToolCore extends CommToolsData {
         this.protectedData.canvases.emptyCanvas.width;
 
       this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg!, 0, 0);
-      // No flip needed: MaskVolume stores in source coordinates (matching the
-      // Three.js / layer canvas convention).  The layer canvas is in screen
-      // coordinates, which already match the source coordinate system.
       ctx.imageSmoothingEnabled = false;
+      // Coronal (axis='y') Z-flip: same as renderSliceToCanvas.
+      if (this.protectedData.axis === 'y') {
+        ctx.save();
+        ctx.scale(1, -1);
+        ctx.translate(0, -this.nrrd_states.changedHeight);
+      }
       ctx.drawImage(
         this.protectedData.canvases.emptyCanvas,
         0,
@@ -575,6 +578,9 @@ export class DrawToolCore extends CommToolsData {
         this.nrrd_states.changedWidth,
         this.nrrd_states.changedHeight
       );
+      if (this.protectedData.axis === 'y') {
+        ctx.restore();
+      }
     };
 
     this.drawingPrameters.handleOnDrawingMouseUp = (e: MouseEvent) => {

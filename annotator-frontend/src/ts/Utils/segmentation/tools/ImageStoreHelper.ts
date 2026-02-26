@@ -51,6 +51,31 @@ export class ImageStoreHelper extends BaseTool {
     return this.ctx.protectedData.canvases.drawingCanvasLayerMaster;
   }
 
+  // ===== ImageData Flip Helpers =====
+
+  /**
+   * Vertically flip an ImageData buffer in-place (swap rows top↔bottom).
+   *
+   * Used to compensate for the Z-axis direction reversal between sagittal
+   * and coronal views. On coronal, Z runs along the canvas j-axis (vertical),
+   * and the display flip (scale(1,-1)) reverses Z relative to sagittal's
+   * horizontal Z mapping. This row-swap aligns the Z ordering so that
+   * MaskVolume stores data in a consistent coordinate system.
+   */
+  private flipImageDataVertically(imageData: ImageData): void {
+    const { width, height, data } = imageData;
+    const rowSize = width * 4; // RGBA = 4 bytes per pixel
+    const temp = new Uint8ClampedArray(rowSize);
+    for (let y = 0; y < Math.floor(height / 2); y++) {
+      const topOffset = y * rowSize;
+      const bottomOffset = (height - 1 - y) * rowSize;
+      // Swap top row and bottom row
+      temp.set(data.subarray(topOffset, topOffset + rowSize));
+      data.copyWithin(topOffset, bottomOffset, bottomOffset + rowSize);
+      data.set(temp, bottomOffset);
+    }
+  }
+
   // ===== Sync Layer Slice Data =====
 
   /**
@@ -74,6 +99,15 @@ export class ImageStoreHelper extends BaseTool {
       this.ctx.protectedData.canvases.emptyCanvas.width,
       this.ctx.protectedData.canvases.emptyCanvas.height
     );
+
+    // Coronal (axis='y') Z-flip: the Z dimension runs vertically on coronal
+    // but horizontally on sagittal, with opposite screen directions.
+    // Flip ImageData vertically before writing to MaskVolume so that
+    // cross-view rendering (sagittal↔coronal) is consistent.
+    // Same pattern as SphereTool.canvasToVoxelCenter('y') Z-flip.
+    if (this.ctx.protectedData.axis === 'y') {
+      this.flipImageDataVertically(imageData);
+    }
 
     // Write label data into 1-channel MaskVolume with RGB→channel reverse lookup
     try {
