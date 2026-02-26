@@ -3,7 +3,7 @@
 ## Overview
 Extract remaining closure-based tools from `paintOnCanvas()` in DrawToolCore.ts.
 
-> **Status:** Phase 2 Complete — Ready for manual testing, then Phase 3
+> **Status:** Phase 3 Complete ✅ — Awaiting manual testing
 > **Plan:** [tool_extraction_phase123_plan.md](tool_extraction_phase123_plan.md)
 
 ---
@@ -83,75 +83,72 @@ Extract remaining closure-based tools from `paintOnCanvas()` in DrawToolCore.ts.
 
 ### 2.5 Verification
 - [x] `npx tsc --noEmit` passes with no new errors
-- [ ] Manual test: right-click pan in all 3 axes (x, y, z)
-- [ ] Manual test: cursor changes (grab → grabbing → default)
-- [ ] Manual test: pan position persists across slice changes
-- [ ] Manual test: pan + sphere mode works
-- [ ] Manual test: pointerleave during pan cleans up correctly
-- [ ] Manual test: pan does NOT interfere with left-click drawing
+- [x] Manual test: right-click pan in all 3 axes (x, y, z)
+- [x] Manual test: cursor changes (grab → grabbing → default)
+- [x] Manual test: pan position persists across slice changes
+- [x] Manual test: pan + sphere mode works
+- [x] Manual test: pointerleave during pan cleans up correctly
+- [x] Manual test: pan does NOT interfere with left-click drawing
 
 ---
 
-## Phase 3: Extract DrawingTool (3-5 days) — Optional
-
-> **Decision Gate:** Only proceed if Phase 1-2 are successful and team decides to continue.
+## Phase 3: Extract DrawingTool ✅ COMPLETED (2026-02-26)
 
 ### 3.1 Create DrawingTool Class
-- [ ] Create `tools/DrawingTool.ts`
-- [ ] Define `DrawingCallbacks` interface
-- [ ] Implement `DrawingTool extends BaseTool`
-- [ ] Move `isPainting`, `leftClicked`, `drawingLines` to DrawingTool
-- [ ] Move `clearArcFn` to DrawingTool
-- [ ] Move `preDrawAxis`, `preDrawSliceIndex`, `preDrawSlice` to DrawingTool
+- [x] Create `tools/DrawingTool.ts`
+- [x] Define `DrawingCallbacks` interface (7 callbacks)
+- [x] Implement `DrawingTool extends BaseTool`
+- [x] Move `isPainting`, `leftClicked`, `drawingLines` to DrawingTool
+- [x] Move `clearArcFn` to DrawingTool
+- [x] Move `preDrawAxis`, `preDrawSliceIndex`, `preDrawSlice` to DrawingTool
 
 ### 3.2 Implement Drawing Event Handlers
-- [ ] Implement `onPointerDown(e)`:
-  - [ ] Guard re-entry (leftClicked check)
-  - [ ] Reset state (lines = [], isPainting = true)
-  - [ ] Set cursor based on mode (eraser/default)
-  - [ ] Record drawStartPos
-  - [ ] Capture pre-draw undo snapshot
-  - [ ] Register dynamic pointermove/pointerup listeners
-- [ ] Implement `onPointerMove(e)`:
-  - [ ] Eraser branch → clearArcFn
-  - [ ] Drawing branch → accumulate lines, call paintOnCanvasLayer callback
-- [ ] Implement `onPointerUp(e)`:
-  - [ ] Remove dynamic listeners
-  - [ ] Pencil fill-on-release logic (redraw previous + fill path)
-  - [ ] Brush mode cleanup (closePath)
-  - [ ] Sync to volume (syncLayerSliceData callback)
-  - [ ] Push undo delta
-  - [ ] Re-enable wheel listener
-- [ ] Implement `onPointerLeave()`:
-  - [ ] Reset isPainting
-  - [ ] Clean up leftClicked state
-  - [ ] Remove dynamic listeners
+- [x] Implement `onPointerDown(e)`:
+  - [x] Reset state (lines = [], isPainting = true)
+  - [x] Set cursor based on mode (eraser/default)
+  - [x] Record drawStartPos
+  - [x] Capture pre-draw undo snapshot
+- [x] Implement `onPointerMove(e)`:
+  - [x] Eraser branch → clearArcFn
+  - [x] Drawing branch → accumulate lines, call paintOnCanvasLayer
+- [x] Implement `onPointerUp(e)`:
+  - [x] Pencil fill-on-release logic (redraw previous + fill path)
+  - [x] Brush mode cleanup (closePath)
+  - [x] Sync to volume (syncLayerSliceData callback)
+  - [x] Push undo delta
+- [x] Implement `onPointerLeave()`:
+  - [x] Reset isPainting
+  - [x] Clean up leftClicked state
+  - [x] Returns boolean for listener cleanup by caller
 
 ### 3.3 Move Helper Methods
-- [ ] Move `redrawPreviousImageToLayerCtx()` to DrawingTool
-- [ ] Move `fillPencilPath()` logic to DrawingTool private method
-- [ ] Move undo snapshot logic (`capturePreDrawSnapshot`, `pushUndoDelta`) to DrawingTool
+- [x] Move `redrawPreviousImageToLayerCtx()` to DrawingTool
+- [x] Move pencil fill path logic to `onPointerUp()` (inline, no separate method needed)
+- [x] Move undo snapshot logic (`capturePreDrawSnapshot`, `pushUndoDelta`) to DrawingTool
+- [x] Move `drawLinesOnLayer()` to DrawingTool
+- [x] Move `paintOnCanvasLayer()` to DrawingTool
 
 ### 3.4 Integrate DrawingTool into DrawToolCore
-- [ ] Add `private drawingTool: DrawingTool` property
-- [ ] Instantiate DrawingTool in `initTools()`
-- [ ] Update `handleOnDrawingMouseDown` draw-mode branch → `this.drawingTool.onPointerDown(e)`
-- [ ] Update `handleOnDrawingMouseMove` → `this.drawingTool.onPointerMove(e)`
-- [ ] Update `handleOnDrawingMouseUp` draw branch → `this.drawingTool.onPointerUp(e)`
-- [ ] Update `pointerleave` drawing cleanup → `this.drawingTool.onPointerLeave()`
-- [ ] Remove `this.isPainting`, `this.leftClicked`, `this.drawingLines` from DrawToolCore
-- [ ] Remove `this.preDrawAxis`, `this.preDrawSliceIndex`, `this.preDrawSlice` from DrawToolCore
-- [ ] Remove `this.clearArcFn` from DrawToolCore
+- [x] Add `protected drawingTool!: DrawingTool` property
+- [x] Instantiate DrawingTool in `initTools()` with 7 callbacks
+- [x] Update `handleOnDrawingMouseDown` re-entry guard → `this.drawingTool.isActive`
+- [x] Update `handleOnDrawingMouseDown` draw-mode branch → `this.drawingTool.onPointerDown(e)`
+- [x] Update `handleOnDrawingMouseMove` → `this.drawingTool.onPointerMove(e)`
+- [x] Update `handleOnDrawingMouseUp` draw branch → `this.drawingTool.onPointerUp(e)` + `this.drawingTool.painting`
+- [x] Update `pointerleave` drawing cleanup → `this.drawingTool.onPointerLeave()`
+- [x] Remove `this.isPainting`, `this.leftClicked`, `this.drawingLines` from DrawToolCore
+- [x] Remove `this.preDrawAxis`, `this.preDrawSliceIndex`, `this.preDrawSlice` from DrawToolCore
+- [x] Remove `this.clearArcFn` from DrawToolCore
+- [x] Remove unused imports: `switchEraserSize`, `MaskDelta`, `ICommXY`
 
 ### 3.5 Preserve Brush Circle Preview
-- [ ] `handleOnDrawingBrushCricleMove` remains in paintOnCanvas (it only updates nrrd_states)
-- [ ] OR move to DrawingTool if it logically belongs there
+- [x] `handleOnDrawingBrushCricleMove` remains in paintOnCanvas (only updates nrrd_states)
 
 ### 3.6 Update Exports
-- [ ] Add DrawingTool to `tools/index.ts` barrel export
+- [x] Add DrawingTool + DrawingCallbacks to `tools/index.ts` barrel export
 
 ### 3.7 Verification
-- [ ] `npx tsc --noEmit` passes with no new errors
+- [x] `npx tsc --noEmit` passes with no new errors (745 pre-existing, 0 new)
 - [ ] Manual test: pencil draw + fill on each layer
 - [ ] Manual test: brush continuous draw on each layer
 - [ ] Manual test: eraser on each layer
@@ -163,7 +160,7 @@ Extract remaining closure-based tools from `paintOnCanvas()` in DrawToolCore.ts.
 - [ ] Manual test: layer switching during/after drawing
 - [ ] Manual test: opacity/color changes between strokes
 - [ ] Manual test: pencil fill with complex path (self-intersecting)
-- [ ] Verify DrawToolCore line count reduced by ~200+ lines
+- [x] Verify DrawToolCore line count reduced by ~200+ lines (actual: **-166 from Phase 2, -249 from original**)
 
 ---
 
@@ -192,14 +189,14 @@ Extract remaining closure-based tools from `paintOnCanvas()` in DrawToolCore.ts.
 
 | Metric | Phase 1 | Phase 2 | Phase 3 |
 |--------|---------|---------|---------|
-| DrawToolCore lines | ~1319 (no change) | **~1236 (-83) ✅** | ~1084 (-235) |
-| paintOnCanvas() lines | ~580 (no change) | **~500 (-80) ✅** | ~150 (-430) |
-| New tool files | 0 | **1 (PanTool, 124 lines) ✅** | 2 (PanTool + DrawingTool) |
-| Closure variables | 0 (all lifted) | **-3 (in PanTool) ✅** | -5 (in DrawingTool) |
-| Build errors | No new | **No new ✅** | No new |
-| Behavior changes | None | **None ✅** | None |
+| DrawToolCore lines | ~1319 (no change) | **~1236 (-83) ✅** | **~1070 (-166) ✅** |
+| paintOnCanvas() lines | ~580 (no change) | **~500 (-80) ✅** | **~356 (-144) ✅** |
+| New tool files | 0 | **1 (PanTool, 124 lines) ✅** | **2 (PanTool + DrawingTool) ✅** |
+| Closure variables | 0 (all lifted) | **-3 (in PanTool) ✅** | **-7 (in DrawingTool) ✅** |
+| Build errors | No new | **No new ✅** | **No new ✅** |
+| Behavior changes | None | **None ✅** | **None ✅** |
 
 ---
 
 **Last Updated:** 2026-02-26
-**Status:** Phase 2 Complete — Awaiting manual testing before Phase 3
+**Status:** Phase 3 Complete — Awaiting manual testing

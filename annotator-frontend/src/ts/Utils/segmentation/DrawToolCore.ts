@@ -3,11 +3,10 @@ import {
   IDrawingEvents,
   IContrastEvents,
   IDrawOpts,
-  ICommXY,
   ICommXYZ,
 } from "./coreTools/coreType";
 import { CommToolsData } from "./CommToolsData";
-import { switchEraserSize, switchPencilIcon, throttle } from "../utils";
+import { switchPencilIcon, throttle } from "../utils";
 import { EventRouter, InteractionMode } from "./eventRouter";
 import { SphereTool } from "./tools/SphereTool";
 import { CrosshairTool } from "./tools/CrosshairTool";
@@ -15,9 +14,10 @@ import { ContrastTool } from "./tools/ContrastTool";
 import { ZoomTool } from "./tools/ZoomTool";
 import { EraserTool } from "./tools/EraserTool";
 import { PanTool } from "./tools/PanTool";
+import { DrawingTool } from "./tools/DrawingTool";
 import { ImageStoreHelper } from "./tools/ImageStoreHelper";
 import type { ToolContext } from "./tools/BaseTool";
-import { UndoManager, MaskDelta } from "./core";
+import { UndoManager } from "./core";
 
 export class DrawToolCore extends CommToolsData {
   container: HTMLElement;
@@ -50,11 +50,6 @@ export class DrawToolCore extends CommToolsData {
   pencilUrls: string[] = [];
   undoManager: UndoManager = new UndoManager();
 
-  /** Snapshot of the active layer's slice captured on mouse-down (before drawing). */
-  private preDrawSlice: Uint8Array | null = null;
-  private preDrawAxis: "x" | "y" | "z" = "z";
-  private preDrawSliceIndex: number = 0;
-
   // Centralized event router
   protected eventRouter: EventRouter | null = null;
 
@@ -65,19 +60,11 @@ export class DrawToolCore extends CommToolsData {
   protected zoomTool!: ZoomTool;
   protected eraserTool!: EraserTool;
   protected panTool!: PanTool;
+  protected drawingTool!: DrawingTool;
   protected imageStoreHelper!: ImageStoreHelper;
 
-  // === Phase 1: Lifted from paintOnCanvas() closure ===
-  /** Left mouse button currently held (draw/crosshair mode) */
-  private leftClicked = false;
   /** Slice index recorded when paintOnCanvas() starts, guards stale-click */
   private paintSliceIndex = 0;
-  /** True while actively painting (between pointerdown and pointerup) */
-  private isPainting = false;
-  /** Accumulated pencil stroke points for fill-on-release */
-  private drawingLines: Array<ICommXY> = [];
-  /** Eraser arc function, assigned once per paintOnCanvas() call */
-  private clearArcFn: ((x: number, y: number, size: number) => void) | null = null;
 
   // need to return to parent
   start: () => void = () => { };
@@ -137,6 +124,16 @@ export class DrawToolCore extends CommToolsData {
 
     this.panTool = new PanTool(toolCtx, {
       zoomActionAfterDrawSphere: () => this.zoomActionAfterDrawSphere(),
+    });
+
+    this.drawingTool = new DrawingTool(toolCtx, {
+      setCurrentLayer: () => this.setCurrentLayer(),
+      compositeAllLayers: () => this.compositeAllLayers(),
+      syncLayerSliceData: (index, layer) => this.syncLayerSliceData(index, layer),
+      filterDrawedImage: (axis, index) => this.filterDrawedImage(axis, index),
+      getVolumeForLayer: (layer) => this.getVolumeForLayer(layer),
+      pushUndoDelta: (delta) => this.undoManager.push(delta),
+      getEraserUrls: () => this.eraserUrls,
     });
   }
 
@@ -295,13 +292,10 @@ export class DrawToolCore extends CommToolsData {
   }
 
   private paintOnCanvas() {
-    // Initialize lifted class properties for this paint cycle
-    this.leftClicked = false;
+    // Initialize tools for this paint cycle
+    this.drawingTool.reset(this.useEraser());
     this.panTool.reset();
     this.paintSliceIndex = this.protectedData.mainPreSlices.index;
-    this.isPainting = false;
-    this.drawingLines = [];
-    this.clearArcFn = this.useEraser();
 
     this.updateOriginAndChangedWH();
 
@@ -370,22 +364,12 @@ export class DrawToolCore extends CommToolsData {
       }
     };
 
-    // drawing move
+    // drawing move — delegated to DrawingTool
     this.drawingPrameters.handleOnDrawingMouseMove = (e: MouseEvent) => {
-      this.protectedData.Is_Draw = true;
-      if (this.isPainting) {
-        if (this.gui_states.Eraser) {
-          this.nrrd_states.stepClear = 1;
-          // drawingCtx.clearRect(e.offsetX - 5, e.offsetY - 5, 25, 25);
-          this.clearArcFn?.(e.offsetX, e.offsetY, this.gui_states.brushAndEraserSize);
-        } else {
-          this.drawingLines.push({ x: e.offsetX, y: e.offsetY });
-          this.paintOnCanvasLayer(e.offsetX, e.offsetY);
-        }
-      }
+      this.drawingTool.onPointerMove(e);
     };
     this.drawingPrameters.handleOnDrawingMouseDown = (e: MouseEvent) => {
-      if (this.leftClicked || this.panTool.isActive) {
+      if (this.drawingTool.isActive || this.panTool.isActive) {
         this.protectedData.canvases.drawingCanvas.removeEventListener(
           "pointerup",
           this.drawingPrameters.handleOnDrawingMouseUp
@@ -406,40 +390,7 @@ export class DrawToolCore extends CommToolsData {
 
       if (e.button === 0) {
         if (this.eventRouter?.getMode() === 'draw') {
-          this.leftClicked = true;
-          this.drawingLines = [];
-          this.isPainting = true;
-          this.protectedData.Is_Draw = true;
-
-          if (this.gui_states.Eraser) {
-            // this.protectedData.canvases.drawingCanvas.style.cursor =
-            //   "url(https://raw.githubusercontent.com/LinkunGao/copper3d-datasets/main/icons/eraser/circular-cursor_48.png) 48 48, crosshair";
-            this.eraserUrls.length > 0
-              ? (this.protectedData.canvases.drawingCanvas.style.cursor =
-                switchEraserSize(
-                  this.gui_states.brushAndEraserSize,
-                  this.eraserUrls
-                ))
-              : (this.protectedData.canvases.drawingCanvas.style.cursor =
-                switchEraserSize(this.gui_states.brushAndEraserSize));
-          } else {
-            this.protectedData.canvases.drawingCanvas.style.cursor =
-              this.gui_states.defaultPaintCursor;
-          }
-
-          this.nrrd_states.drawStartPos.x = e.offsetX;
-          this.nrrd_states.drawStartPos.y = e.offsetY;
-
-          // Capture pre-draw slice snapshot for undo
-          try {
-            this.preDrawAxis = this.protectedData.axis;
-            this.preDrawSliceIndex = this.nrrd_states.currentIndex;
-            const vol = this.getVolumeForLayer(this.gui_states.layer);
-            this.preDrawSlice = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis).data.slice();
-          } catch {
-            this.preDrawSlice = null;
-          }
-
+          this.drawingTool.onPointerDown(e);
           this.protectedData.canvases.drawingCanvas.addEventListener(
             "pointerup",
             this.drawingPrameters.handleOnDrawingMouseUp
@@ -492,62 +443,13 @@ export class DrawToolCore extends CommToolsData {
     this.drawingPrameters.handleOnDrawingMouseUp = (e: MouseEvent) => {
       if (e.button === 0) {
 
-        if (this.eventRouter?.getMode() === 'draw' || this.isPainting) {
-          this.leftClicked = false;
-          let { ctx, canvas } = this.setCurrentLayer();
-
-          ctx.closePath();
+        if (this.eventRouter?.getMode() === 'draw' || this.drawingTool.painting) {
+          this.drawingTool.onPointerUp(e);
 
           this.protectedData.canvases.drawingCanvas.removeEventListener(
             "pointermove",
             this.drawingPrameters.handleOnDrawingMouseMove
           );
-          if (!this.gui_states.Eraser) {
-            if (this.gui_states.pencil) {
-              // Clear only the current layer canvas (NOT master)
-              canvas.width = canvas.width;
-              // Redraw previous layer data from volume
-              this.redrawPreviousImageToLayerCtx(ctx);
-              // Draw new pencil strokes on current layer canvas
-              ctx.beginPath();
-              ctx.moveTo(this.drawingLines[0].x, this.drawingLines[0].y);
-              for (let i = 1; i < this.drawingLines.length; i++) {
-                ctx.lineTo(this.drawingLines[i].x, this.drawingLines[i].y);
-              }
-              ctx.closePath();
-              ctx.lineWidth = 1;
-              ctx.fillStyle = this.gui_states.fillColor;
-              ctx.fill();
-              // Composite ALL layers to master (not just current layer)
-              this.compositeAllLayers();
-            }
-          }
-
-          this.syncLayerSliceData(
-            this.nrrd_states.currentIndex,
-            this.gui_states.layer
-          );
-
-          this.isPainting = false;
-
-          // Push delta to UndoManager (new Delta-based undo system)
-          if (this.preDrawSlice) {
-            try {
-              const vol = this.getVolumeForLayer(this.gui_states.layer);
-              const { data: newSlice } = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis);
-              const delta: MaskDelta = {
-                layerId: this.gui_states.layer,
-                axis: this.preDrawAxis,
-                sliceIndex: this.preDrawSliceIndex,
-                oldSlice: this.preDrawSlice,
-                newSlice: newSlice.slice(),
-              };
-              this.undoManager.push(delta);
-            } catch {
-              // Volume not ready — skip
-            }
-            this.preDrawSlice = null;
-          }
 
           // add wheel after pointer up
           this.protectedData.canvases.drawingCanvas.addEventListener(
@@ -623,11 +525,9 @@ export class DrawToolCore extends CommToolsData {
 
     this.protectedData.canvases.drawingCanvas.addEventListener(
       "pointerleave",
-      (e: MouseEvent) => {
-        this.isPainting = false;
-        if (this.leftClicked) {
-          this.leftClicked = false;
-          this.protectedData.ctxes.drawingLayerMasterCtx.closePath();
+      () => {
+        const wasDrawing = this.drawingTool.onPointerLeave();
+        if (wasDrawing) {
           this.protectedData.canvases.drawingCanvas.removeEventListener(
             "pointermove",
             this.drawingPrameters.handleOnDrawingMouseMove
@@ -799,35 +699,6 @@ export class DrawToolCore extends CommToolsData {
     );
   }
 
-  /** Extracted from paintOnCanvas() — redraws persisted layer data onto ctx before new pencil fill */
-  private redrawPreviousImageToLayerCtx(ctx: CanvasRenderingContext2D) {
-    const tempPreImg = this.filterDrawedImage(
-      this.protectedData.axis,
-      this.nrrd_states.currentIndex,
-    )?.image;
-    this.protectedData.canvases.emptyCanvas.width =
-      this.protectedData.canvases.emptyCanvas.width;
-
-    this.protectedData.ctxes.emptyCtx.putImageData(tempPreImg!, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    // Coronal (axis='y') Z-flip: same as renderSliceToCanvas.
-    if (this.protectedData.axis === 'y') {
-      ctx.save();
-      ctx.scale(1, -1);
-      ctx.translate(0, -this.nrrd_states.changedHeight);
-    }
-    ctx.drawImage(
-      this.protectedData.canvases.emptyCanvas,
-      0,
-      0,
-      this.nrrd_states.changedWidth,
-      this.nrrd_states.changedHeight
-    );
-    if (this.protectedData.axis === 'y') {
-      ctx.restore();
-    }
-  }
-
   /*************************************May consider to move outside *******************************************/
   private drawLine = (x1: number, y1: number, x2: number, y2: number) => {
     this.protectedData.ctxes.drawingCtx.beginPath();
@@ -836,43 +707,6 @@ export class DrawToolCore extends CommToolsData {
     this.protectedData.ctxes.drawingCtx.strokeStyle = this.gui_states.color;
     this.protectedData.ctxes.drawingCtx.stroke();
   };
-
-  private drawLinesOnLayer(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number
-  ) {
-    ctx.beginPath();
-    ctx.moveTo(
-      this.nrrd_states.drawStartPos.x,
-      this.nrrd_states.drawStartPos.y
-    );
-    if (this.gui_states.pencil) {
-      ctx.strokeStyle = this.gui_states.color;
-      ctx.lineWidth = this.gui_states.lineWidth;
-    } else {
-      ctx.strokeStyle = this.gui_states.brushColor;
-      ctx.lineWidth = this.gui_states.brushAndEraserSize;
-    }
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    ctx.closePath();
-  }
-
-  private paintOnCanvasLayer(x: number, y: number) {
-    let { ctx, canvas } = this.setCurrentLayer();
-
-    // Draw only on the current layer canvas (not master directly)
-    this.drawLinesOnLayer(ctx, x, y);
-    // Composite all layers to master to preserve other layers' data
-    this.compositeAllLayers();
-    // reset drawing start position to current position.
-    this.nrrd_states.drawStartPos.x = x;
-    this.nrrd_states.drawStartPos.y = y;
-    // need to flag the map as needing updating.
-    this.protectedData.mainPreSlices.mesh.material.map.needsUpdate = true;
-  }
 
   private initAllCanvas() {
     /**

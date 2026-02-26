@@ -13,6 +13,8 @@ export type { ToolContext } from "./BaseTool";
 
 // Drawing Tools
 export { EraserTool } from "./EraserTool";
+export { DrawingTool } from "./DrawingTool";
+export type { DrawingCallbacks } from "./DrawingTool";
 
 // Pan / Navigation
 export { PanTool } from "./PanTool";
