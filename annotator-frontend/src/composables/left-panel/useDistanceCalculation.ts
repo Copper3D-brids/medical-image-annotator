@@ -48,14 +48,14 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
      * Phase 7: Helper to get voxelSpacing - prefers SegmentationManager, falls back to NrrdTools
      */
     const getVoxelSpacing = (): number[] => {
-        return nrrdTools.value!.nrrd_states.voxelSpacing;
+        return nrrdTools.value!.getVoxelSpacing();
     };
 
     /**
      * Phase 7: Helper to get spaceOrigin - prefers SegmentationManager, falls back to NrrdTools
      */
     const getSpaceOrigin = (): number[] => {
-        return nrrdTools.value!.nrrd_states.spaceOrigin;
+        return nrrdTools.value!.getSpaceOrigin();
     };
 
     const getSphereData = async (res: IToolSphereData) => {
@@ -145,10 +145,10 @@ export function useDistanceCalculation(deps: IDistanceCalculationDeps) {
         }
 
         // Send status to calculator component
-        if (nrrdTools.value!.gui_states.activeSphereType !== "tumour") {
+        if (nrrdTools.value!.getActiveSphereType() !== "tumour") {
             emitter.emit(
                 "SegmentationTrial:CalulatorTimerFunction",
-                nrrdTools.value!.gui_states.activeSphereType
+                nrrdTools.value!.getActiveSphereType()
             );
         }
     };

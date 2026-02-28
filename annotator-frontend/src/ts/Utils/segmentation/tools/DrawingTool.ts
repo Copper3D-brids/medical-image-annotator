@@ -86,20 +86,20 @@ export class DrawingTool extends BaseTool {
     this.ctx.protectedData.Is_Draw = true;
 
     // Set cursor based on mode
-    if (this.ctx.gui_states.Eraser) {
+    if (this.ctx.gui_states.mode.Eraser) {
       const urls = this.callbacks.getEraserUrls();
       this.ctx.protectedData.canvases.drawingCanvas.style.cursor =
         urls.length > 0
-          ? switchEraserSize(this.ctx.gui_states.brushAndEraserSize, urls)
-          : switchEraserSize(this.ctx.gui_states.brushAndEraserSize);
+          ? switchEraserSize(this.ctx.gui_states.drawing.brushAndEraserSize, urls)
+          : switchEraserSize(this.ctx.gui_states.drawing.brushAndEraserSize);
     } else {
       this.ctx.protectedData.canvases.drawingCanvas.style.cursor =
-        this.ctx.gui_states.defaultPaintCursor;
+        this.ctx.gui_states.viewConfig.defaultPaintCursor;
     }
 
     // Record draw start position
-    this.ctx.nrrd_states.drawStartPos.x = e.offsetX;
-    this.ctx.nrrd_states.drawStartPos.y = e.offsetY;
+    this.ctx.nrrd_states.interaction.drawStartPos.x = e.offsetX;
+    this.ctx.nrrd_states.interaction.drawStartPos.y = e.offsetY;
 
     // Capture pre-draw slice snapshot for undo
     this.capturePreDrawSnapshot();
@@ -112,9 +112,9 @@ export class DrawingTool extends BaseTool {
   onPointerMove(e: MouseEvent): void {
     this.ctx.protectedData.Is_Draw = true;
     if (this.isPainting) {
-      if (this.ctx.gui_states.Eraser) {
-        this.ctx.nrrd_states.stepClear = 1;
-        this.clearArcFn?.(e.offsetX, e.offsetY, this.ctx.gui_states.brushAndEraserSize);
+      if (this.ctx.gui_states.mode.Eraser) {
+        this.ctx.nrrd_states.flags.stepClear = 1;
+        this.clearArcFn?.(e.offsetX, e.offsetY, this.ctx.gui_states.drawing.brushAndEraserSize);
       } else {
         this.drawingLines.push({ x: e.offsetX, y: e.offsetY });
         this.paintOnCanvasLayer(e.offsetX, e.offsetY);
@@ -132,8 +132,8 @@ export class DrawingTool extends BaseTool {
 
     ctx.closePath();
 
-    if (!this.ctx.gui_states.Eraser) {
-      if (this.ctx.gui_states.pencil) {
+    if (!this.ctx.gui_states.mode.Eraser) {
+      if (this.ctx.gui_states.mode.pencil) {
         // Clear only the current layer canvas (NOT master)
         canvas.width = canvas.width;
         // Redraw previous layer data from volume
@@ -146,7 +146,7 @@ export class DrawingTool extends BaseTool {
         }
         ctx.closePath();
         ctx.lineWidth = 1;
-        ctx.fillStyle = this.ctx.gui_states.fillColor;
+        ctx.fillStyle = this.ctx.gui_states.drawing.fillColor;
         ctx.fill();
         // Composite ALL layers to master (not just current layer)
         this.callbacks.compositeAllLayers();
@@ -154,8 +154,8 @@ export class DrawingTool extends BaseTool {
     }
 
     this.callbacks.syncLayerSliceData(
-      this.ctx.nrrd_states.currentSliceIndex,
-      this.ctx.gui_states.layer
+      this.ctx.nrrd_states.view.currentSliceIndex,
+      this.ctx.gui_states.layerChannel.layer
     );
 
     this.isPainting = false;
@@ -183,8 +183,8 @@ export class DrawingTool extends BaseTool {
   private capturePreDrawSnapshot(): void {
     try {
       this.preDrawAxis = this.ctx.protectedData.axis;
-      this.preDrawSliceIndex = this.ctx.nrrd_states.currentSliceIndex;
-      const vol = this.callbacks.getVolumeForLayer(this.ctx.gui_states.layer);
+      this.preDrawSliceIndex = this.ctx.nrrd_states.view.currentSliceIndex;
+      const vol = this.callbacks.getVolumeForLayer(this.ctx.gui_states.layerChannel.layer);
       this.preDrawSlice = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis).data.slice();
     } catch {
       this.preDrawSlice = null;
@@ -195,10 +195,10 @@ export class DrawingTool extends BaseTool {
   private pushUndoDelta(): void {
     if (!this.preDrawSlice) return;
     try {
-      const vol = this.callbacks.getVolumeForLayer(this.ctx.gui_states.layer);
+      const vol = this.callbacks.getVolumeForLayer(this.ctx.gui_states.layerChannel.layer);
       const { data: newSlice } = vol.getSliceUint8(this.preDrawSliceIndex, this.preDrawAxis);
       const delta: MaskDelta = {
-        layerId: this.ctx.gui_states.layer,
+        layerId: this.ctx.gui_states.layerChannel.layer,
         axis: this.preDrawAxis,
         sliceIndex: this.preDrawSliceIndex,
         oldSlice: this.preDrawSlice,
@@ -218,7 +218,7 @@ export class DrawingTool extends BaseTool {
   private redrawPreviousImageToLayerCtx(ctx: CanvasRenderingContext2D): void {
     const tempPreImg = this.callbacks.filterDrawedImage(
       this.ctx.protectedData.axis,
-      this.ctx.nrrd_states.currentSliceIndex,
+      this.ctx.nrrd_states.view.currentSliceIndex,
     )?.image;
     this.ctx.protectedData.canvases.emptyCanvas.width =
       this.ctx.protectedData.canvases.emptyCanvas.width;
@@ -229,14 +229,14 @@ export class DrawingTool extends BaseTool {
     if (this.ctx.protectedData.axis === 'y') {
       ctx.save();
       ctx.scale(1, -1);
-      ctx.translate(0, -this.ctx.nrrd_states.changedHeight);
+      ctx.translate(0, -this.ctx.nrrd_states.view.changedHeight);
     }
     ctx.drawImage(
       this.ctx.protectedData.canvases.emptyCanvas,
       0,
       0,
-      this.ctx.nrrd_states.changedWidth,
-      this.ctx.nrrd_states.changedHeight
+      this.ctx.nrrd_states.view.changedWidth,
+      this.ctx.nrrd_states.view.changedHeight
     );
     if (this.ctx.protectedData.axis === 'y') {
       ctx.restore();
@@ -251,15 +251,15 @@ export class DrawingTool extends BaseTool {
   ): void {
     ctx.beginPath();
     ctx.moveTo(
-      this.ctx.nrrd_states.drawStartPos.x,
-      this.ctx.nrrd_states.drawStartPos.y
+      this.ctx.nrrd_states.interaction.drawStartPos.x,
+      this.ctx.nrrd_states.interaction.drawStartPos.y
     );
-    if (this.ctx.gui_states.pencil) {
-      ctx.strokeStyle = this.ctx.gui_states.color;
-      ctx.lineWidth = this.ctx.gui_states.lineWidth;
+    if (this.ctx.gui_states.mode.pencil) {
+      ctx.strokeStyle = this.ctx.gui_states.drawing.color;
+      ctx.lineWidth = this.ctx.gui_states.drawing.lineWidth;
     } else {
-      ctx.strokeStyle = this.ctx.gui_states.brushColor;
-      ctx.lineWidth = this.ctx.gui_states.brushAndEraserSize;
+      ctx.strokeStyle = this.ctx.gui_states.drawing.brushColor;
+      ctx.lineWidth = this.ctx.gui_states.drawing.brushAndEraserSize;
     }
 
     ctx.lineTo(x, y);
@@ -276,8 +276,8 @@ export class DrawingTool extends BaseTool {
     // Composite all layers to master to preserve other layers' data
     this.callbacks.compositeAllLayers();
     // Reset drawing start position to current position
-    this.ctx.nrrd_states.drawStartPos.x = x;
-    this.ctx.nrrd_states.drawStartPos.y = y;
+    this.ctx.nrrd_states.interaction.drawStartPos.x = x;
+    this.ctx.nrrd_states.interaction.drawStartPos.y = y;
     // Flag the map as needing updating
     this.ctx.protectedData.mainPreSlices.mesh.material.map.needsUpdate = true;
   }

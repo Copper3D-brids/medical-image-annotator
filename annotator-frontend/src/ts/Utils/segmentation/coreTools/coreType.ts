@@ -157,27 +157,39 @@ interface IProtected {
   };
 }
 
-interface IGUIStates {
-  mainAreaSize: number;
-  dragSensitivity: number;
+// ── Phase 5: Semantic sub-interfaces for IGUIStates ──────────────────────
+
+/** Tool mode flags — which tool is currently active */
+interface IToolModeState {
+  pencil: boolean;
   Eraser: boolean;
+  sphere: boolean;
+  activeSphereType: "tumour" | "skin" | "nipple" | "ribcage";
+}
+
+/** Drawing configuration — brush/pencil appearance and behavior */
+interface IDrawingConfig {
   globalAlpha: number;
   lineWidth: number;
   color: string;
-  pencil: boolean;
   fillColor: string;
   brushColor: string;
   brushAndEraserSize: number;
+}
+
+/** View configuration — UI layout and interaction parameters */
+interface IViewConfig {
+  mainAreaSize: number;
+  dragSensitivity: number;
   cursor: string;
-  layer: string;
-  activeSphereType: "tumour" | "skin" | "nipple" | "ribcage";
-  sphere: boolean;
-  // subView: boolean;
-  // subViewScale: number;
-  readyToUpdate: boolean;
   defaultPaintCursor: string;
   max_sensitive: number;
+  readyToUpdate: boolean;
+}
 
+/** Layer/channel state — active layer, channel, and visibility */
+interface ILayerChannelState {
+  layer: string;
   /** Currently active channel (1-8). Channel 0 is transparent/erased. */
   activeChannel: number;
   /** Layer visibility state: { layer1: true, layer2: true, layer3: true } */
@@ -185,6 +197,8 @@ interface IGUIStates {
   /** Per-layer channel visibility: { layer1: { 1: true, ..., 8: true }, ... } */
   channelVisibility: Record<string, Record<number, boolean>>;
 }
+
+interface IGUIStates extends IToolModeState, IDrawingConfig, IViewConfig, ILayerChannelState {}
 
 interface IKeyBoardSettings {
   draw: string;
@@ -196,7 +210,10 @@ interface IKeyBoardSettings {
   mouseWheel: "Scroll:Zoom" | "Scroll:Slice";
 }
 
-interface INrrdStates {
+// ── Phase 4: Semantic sub-interfaces for INrrdStates ──────────────────────
+
+/** Image metadata — set once during NRRD loading, read-only at runtime */
+interface IImageMetadata {
   originWidth: number;
   originHeight: number;
   nrrd_x_mm: number;
@@ -205,50 +222,62 @@ interface INrrdStates {
   nrrd_x_pixel: number;
   nrrd_y_pixel: number;
   nrrd_z_pixel: number;
-  changedWidth: number;
-  changedHeight: number;
-  preSliceIndex: number;
-  currentSliceIndex: number;
-  maxIndex: number;
-  minIndex: number;
-  RSARatio: number;
+  dimensions: number[];
   voxelSpacing: number[];
   spaceOrigin: number[];
-  dimensions: number[];
-  loadingMaskData: boolean;
+  RSARatio: number;
   ratios: ICommXYZ;
-  contrastNum: number;
-  showContrast: boolean;
-  isCursorSelect: boolean;
-  cursorPageX: number;
-  cursorPageY: number;
-  sphereOrigin: ICommXYZ;
-  tumourSphereOrigin: ICommXYZ | null,
-  skinSphereOrigin: ICommXYZ | null,
-  ribSphereOrigin: ICommXYZ | null,
-  nippleSphereOrigin: ICommXYZ | null,
+  layers: string[];
+}
 
-  /**
-   * Dedicated MaskVolume for SphereTool 3D sphere data.
-   * Separate from layer volumes to avoid polluting draw mask data.
-   * Created in setAllSlices(), cleared in reset().
-   * Type is `any` here to avoid circular deps (actual type: MaskVolume).
-   */
-  sphereMaskVolume: any;
-  sphereRadius: number;
+/** View state — runtime display/navigation state */
+interface IViewState {
+  changedWidth: number;
+  changedHeight: number;
+  currentSliceIndex: number;
+  preSliceIndex: number;
+  maxIndex: number;
+  minIndex: number;
+  contrastNum: number;
+  sizeFoctor: number;
+  showContrast: boolean;
+  switchSliceFlag: boolean;
+  previousPanelL: number;
+  previousPanelT: number;
+}
+
+/** Interaction state — mouse/cursor tracking */
+interface IInteractionState {
   Mouse_Over_x: number;
   Mouse_Over_y: number;
   Mouse_Over: boolean;
-  stepClear: number;
-  sizeFoctor: number;
-  clearAllFlag: boolean;
-  previousPanelL: number;
-  previousPanelT: number;
-  switchSliceFlag: boolean;
-  layers: string[];
-
+  cursorPageX: number;
+  cursorPageY: number;
+  isCursorSelect: boolean;
   drawStartPos: ICommXY;
 }
+
+/** Sphere state — SphereTool-specific data */
+interface ISphereState {
+  sphereOrigin: ICommXYZ;
+  tumourSphereOrigin: ICommXYZ | null;
+  skinSphereOrigin: ICommXYZ | null;
+  ribSphereOrigin: ICommXYZ | null;
+  nippleSphereOrigin: ICommXYZ | null;
+  /** Dedicated MaskVolume for SphereTool 3D sphere data. Type is `any` to avoid circular deps. */
+  sphereMaskVolume: any;
+  sphereRadius: number;
+}
+
+/** Internal flags — transient operational flags */
+interface IInternalFlags {
+  stepClear: number;
+  clearAllFlag: boolean;
+  loadingMaskData: boolean;
+}
+
+/** Legacy flat interface — kept for backward compatibility during migration */
+interface INrrdStates extends IImageMetadata, IViewState, IInteractionState, ISphereState, IInternalFlags {}
 
 interface IDragOpts {
   showNumber?: boolean;
@@ -411,9 +440,18 @@ export {
   IContrastEvents,
   IProtected,
   IGUIStates,
+  IToolModeState,
+  IDrawingConfig,
+  IViewConfig,
+  ILayerChannelState,
   IDragOpts,
   IDrawOpts,
   INrrdStates,
+  IImageMetadata,
+  IViewState,
+  IInteractionState,
+  ISphereState,
+  IInternalFlags,
   IPaintImage,
   IPaintImages,
   ISkipSlicesDictType,

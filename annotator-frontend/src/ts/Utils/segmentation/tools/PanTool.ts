@@ -81,7 +81,7 @@ export class PanTool extends BaseTool {
       this.boundPointerMove
     );
 
-    if (this.ctx.gui_states.sphere) {
+    if (this.ctx.gui_states.mode.sphere) {
       this.callbacks.zoomActionAfterDrawSphere();
     }
   }
@@ -112,13 +112,13 @@ export class PanTool extends BaseTool {
    */
   private handlePointerMove(e: MouseEvent): void {
     this.ctx.protectedData.canvases.drawingCanvas.style.cursor = "grabbing";
-    this.ctx.nrrd_states.previousPanelL = e.clientX - this.panMoveInnerX;
-    this.ctx.nrrd_states.previousPanelT = e.clientY - this.panMoveInnerY;
+    this.ctx.nrrd_states.view.previousPanelL = e.clientX - this.panMoveInnerX;
+    this.ctx.nrrd_states.view.previousPanelT = e.clientY - this.panMoveInnerY;
     this.ctx.protectedData.canvases.displayCanvas.style.left =
       this.ctx.protectedData.canvases.drawingCanvas.style.left =
-      this.ctx.nrrd_states.previousPanelL + "px";
+      this.ctx.nrrd_states.view.previousPanelL + "px";
     this.ctx.protectedData.canvases.displayCanvas.style.top =
       this.ctx.protectedData.canvases.drawingCanvas.style.top =
-      this.ctx.nrrd_states.previousPanelT + "px";
+      this.ctx.nrrd_states.view.previousPanelT + "px";
   }
 }

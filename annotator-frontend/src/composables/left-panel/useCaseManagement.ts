@@ -228,8 +228,7 @@ export function useCaseManagement(deps: ICaseManagementDeps) {
      * Notifies components that images are loaded
      */
     function tellAllRelevantComponentsImagesLoaded() {
-        const guiSettings = nrrdTools.value!.getGuiSettings();
-        emitter.emit("Segmentation:FinishLoadAllCaseImages", guiSettings);
+        emitter.emit("Segmentation:FinishLoadAllCaseImages");
     }
 
     /**

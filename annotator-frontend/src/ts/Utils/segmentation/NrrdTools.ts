@@ -186,18 +186,16 @@ export class NrrdTools extends DrawToolCore {
     };
   }
 
-  getGuiSettings() {
-    if (!!this.guiParameterSettings) {
-      // update image volume
+  /**
+   * Sync guiParameterSettings with current volume metadata.
+   * Called internally when slices are loaded or switched.
+   */
+  private syncGuiParameterSettings(): void {
+    if (this.guiParameterSettings && this.protectedData.mainPreSlices) {
       this.guiParameterSettings.windowHigh.value = this.guiParameterSettings.windowLow.value = this.protectedData.mainPreSlices.volume;
       this.guiParameterSettings.windowHigh.max = this.guiParameterSettings.windowLow.max = this.protectedData.mainPreSlices.volume.max;
       this.guiParameterSettings.windowHigh.min = this.guiParameterSettings.windowLow.min = this.protectedData.mainPreSlices.volume.min;
     }
-
-    return {
-      guiState: this.gui_states,
-      guiSetting: this.guiParameterSettings,
-    };
   }
 
   // ── Layer & Channel Management API ─────────────────────────────────────
@@ -206,7 +204,7 @@ export class NrrdTools extends DrawToolCore {
    * Set the active layer and update fillColor/brushColor to match the active channel.
    */
   setActiveLayer(layerId: string): void {
-    this.gui_states.layer = layerId;
+    this.gui_states.layerChannel.layer = layerId;
     this.syncBrushColor();
   }
 
@@ -214,7 +212,7 @@ export class NrrdTools extends DrawToolCore {
    * Set the active channel (1-8) and update fillColor/brushColor.
    */
   setActiveChannel(channel: ChannelValue): void {
-    this.gui_states.activeChannel = channel;
+    this.gui_states.layerChannel.activeChannel = channel;
     this.syncBrushColor();
   }
 
@@ -228,7 +226,7 @@ export class NrrdTools extends DrawToolCore {
    * ```
    */
   setActiveSphereType(type: SphereType): void {
-    this.gui_states.activeSphereType = type;
+    this.gui_states.mode.activeSphereType = type;
     // Apply color side-effect: update fillColor/brushColor from sphere channel map
     const mapping = SPHERE_CHANNEL_MAP[type];
     if (mapping) {
@@ -236,9 +234,16 @@ export class NrrdTools extends DrawToolCore {
       const color = volume
         ? rgbaToHex(volume.getChannelColor(mapping.channel))
         : (CHANNEL_HEX_COLORS[mapping.channel] || '#00ff00');
-      this.gui_states.fillColor = color;
-      this.gui_states.brushColor = color;
+      this.gui_states.drawing.fillColor = color;
+      this.gui_states.drawing.brushColor = color;
     }
+  }
+
+  /**
+   * Get the currently active sphere type.
+   */
+  getActiveSphereType(): SphereType {
+    return this.gui_states.mode.activeSphereType as SphereType;
   }
 
   // ── Phase 1: GUI API — Mode Management ──────────────────────────────────
@@ -253,19 +258,19 @@ export class NrrdTools extends DrawToolCore {
   setMode(mode: ToolMode): void {
     if (!this.guiCallbacks) return;
 
-    const prevSphere = this.gui_states.sphere;
+    const prevSphere = this.gui_states.mode.sphere;
     const prevCalculator = this._calculatorActive;
 
     // Reset all mode flags
-    this.gui_states.pencil = false;
-    this.gui_states.Eraser = false;
-    this.gui_states.sphere = false;
+    this.gui_states.mode.pencil = false;
+    this.gui_states.mode.Eraser = false;
+    this.gui_states.mode.sphere = false;
     this._calculatorActive = false;
 
     // Activate new mode
     switch (mode) {
       case "pencil":
-        this.gui_states.pencil = true;
+        this.gui_states.mode.pencil = true;
         this.guiCallbacks.updatePencilState();
         break;
       case "brush":
@@ -273,23 +278,23 @@ export class NrrdTools extends DrawToolCore {
         this.guiCallbacks.updatePencilState();
         break;
       case "eraser":
-        this.gui_states.Eraser = true;
+        this.gui_states.mode.Eraser = true;
         this.guiCallbacks.updateEraserState();
         break;
       case "sphere":
-        this.gui_states.sphere = true;
+        this.gui_states.mode.sphere = true;
         break;
       case "calculator":
-        this.gui_states.sphere = true;
+        this.gui_states.mode.sphere = true;
         this._calculatorActive = true;
         break;
     }
 
     // Handle sphere mode transitions
-    if (prevSphere && !this.gui_states.sphere) {
+    if (prevSphere && !this.gui_states.mode.sphere) {
       this.guiCallbacks.updateSphereState(); // exits sphere mode
     }
-    if (!prevSphere && this.gui_states.sphere) {
+    if (!prevSphere && this.gui_states.mode.sphere) {
       this.guiCallbacks.updateSphereState(); // enters sphere mode
     }
 
@@ -304,9 +309,9 @@ export class NrrdTools extends DrawToolCore {
    */
   getMode(): ToolMode {
     if (this._calculatorActive) return "calculator";
-    if (this.gui_states.sphere) return "sphere";
-    if (this.gui_states.Eraser) return "eraser";
-    if (this.gui_states.pencil) return "pencil";
+    if (this.gui_states.mode.sphere) return "sphere";
+    if (this.gui_states.mode.Eraser) return "eraser";
+    if (this.gui_states.mode.pencil) return "pencil";
     return "brush";
   }
 
@@ -324,14 +329,14 @@ export class NrrdTools extends DrawToolCore {
    * @param value Opacity value [0.1, 1]
    */
   setOpacity(value: number): void {
-    this.gui_states.globalAlpha = Math.max(0.1, Math.min(1, value));
+    this.gui_states.drawing.globalAlpha = Math.max(0.1, Math.min(1, value));
   }
 
   /**
    * Get the current mask overlay opacity.
    */
   getOpacity(): number {
-    return this.gui_states.globalAlpha;
+    return this.gui_states.drawing.globalAlpha;
   }
 
   /**
@@ -339,7 +344,7 @@ export class NrrdTools extends DrawToolCore {
    * @param size Brush size [5, 50]
    */
   setBrushSize(size: number): void {
-    this.gui_states.brushAndEraserSize = Math.max(5, Math.min(50, size));
+    this.gui_states.drawing.brushAndEraserSize = Math.max(5, Math.min(50, size));
     this.guiCallbacks?.updateBrushAndEraserSize();
   }
 
@@ -347,7 +352,7 @@ export class NrrdTools extends DrawToolCore {
    * Get the current brush/eraser size.
    */
   getBrushSize(): number {
-    return this.gui_states.brushAndEraserSize;
+    return this.gui_states.drawing.brushAndEraserSize;
   }
 
   /**
@@ -355,7 +360,7 @@ export class NrrdTools extends DrawToolCore {
    * Call finishWindowAdjustment() when the user finishes dragging.
    */
   setWindowHigh(value: number): void {
-    this.gui_states.readyToUpdate = false;
+    this.gui_states.viewConfig.readyToUpdate = false;
     this.guiCallbacks?.updateWindowHigh(value);
   }
 
@@ -364,7 +369,7 @@ export class NrrdTools extends DrawToolCore {
    * Call finishWindowAdjustment() when the user finishes dragging.
    */
   setWindowLow(value: number): void {
-    this.gui_states.readyToUpdate = false;
+    this.gui_states.viewConfig.readyToUpdate = false;
     this.guiCallbacks?.updateWindowLow(value);
   }
 
@@ -414,7 +419,7 @@ export class NrrdTools extends DrawToolCore {
     } else if (key === "windowLow") {
       value = setting.value?.windowLow ?? 0;
     } else {
-      value = (this.gui_states as any)[key] ?? 0;
+      value = (this.gui_states.drawing as any)[key] ?? 0;
     }
 
     return {
@@ -431,14 +436,14 @@ export class NrrdTools extends DrawToolCore {
    * Set the pencil stroke color.
    */
   setPencilColor(hex: string): void {
-    this.gui_states.color = hex;
+    this.gui_states.drawing.color = hex;
   }
 
   /**
    * Get the current pencil stroke color.
    */
   getPencilColor(): string {
-    return this.gui_states.color;
+    return this.gui_states.drawing.color;
   }
 
   /**
@@ -463,26 +468,26 @@ export class NrrdTools extends DrawToolCore {
       case "clearActiveLayerMask": {
         const text = "Are you sure remove annotations on All slice?";
         if (confirm(text) === true) {
-          this.nrrd_states.clearAllFlag = true;
+          this.nrrd_states.flags.clearAllFlag = true;
           this.clearActiveSlice();
           this.clearActiveLayer();
         }
-        this.nrrd_states.clearAllFlag = false;
+        this.nrrd_states.flags.clearAllFlag = false;
         break;
       }
       case "resetZoom":
-        this.nrrd_states.sizeFoctor = this.baseCanvasesSize;
-        this.gui_states.mainAreaSize = this.baseCanvasesSize;
-        this.resizePaintArea(this.nrrd_states.sizeFoctor);
+        this.nrrd_states.view.sizeFoctor = this.baseCanvasesSize;
+        this.gui_states.viewConfig.mainAreaSize = this.baseCanvasesSize;
+        this.resizePaintArea(this.nrrd_states.view.sizeFoctor);
         this.resetPaintAreaUIPosition();
         break;
       case "downloadCurrentMask": {
         const config: IDownloadImageConfig = {
           axis: this.protectedData.axis,
-          currentSliceIndex: this.nrrd_states.currentSliceIndex,
+          currentSliceIndex: this.nrrd_states.view.currentSliceIndex,
           drawingCanvas: this.protectedData.canvases.drawingCanvas,
-          originWidth: this.nrrd_states.originWidth,
-          originHeight: this.nrrd_states.originHeight,
+          originWidth: this.nrrd_states.image.originWidth,
+          originHeight: this.nrrd_states.image.originHeight,
         };
         enableDownload(config);
         break;
@@ -495,17 +500,17 @@ export class NrrdTools extends DrawToolCore {
    * Falls back to global CHANNEL_HEX_COLORS if volume not available.
    */
   private syncBrushColor(): void {
-    const channel = this.gui_states.activeChannel || 1;
-    const layer = this.gui_states.layer;
+    const channel = this.gui_states.layerChannel.activeChannel || 1;
+    const layer = this.gui_states.layerChannel.layer;
     const volume = this.protectedData.maskData.volumes[layer];
     if (volume) {
       const hex = rgbaToHex(volume.getChannelColor(channel));
-      this.gui_states.fillColor = hex;
-      this.gui_states.brushColor = hex;
+      this.gui_states.drawing.fillColor = hex;
+      this.gui_states.drawing.brushColor = hex;
     } else {
       const hex = CHANNEL_HEX_COLORS[channel] || '#00ff00';
-      this.gui_states.fillColor = hex;
-      this.gui_states.brushColor = hex;
+      this.gui_states.drawing.fillColor = hex;
+      this.gui_states.drawing.brushColor = hex;
     }
   }
 
@@ -513,21 +518,21 @@ export class NrrdTools extends DrawToolCore {
    * Get the currently active layer id.
    */
   getActiveLayer(): string {
-    return this.gui_states.layer;
+    return this.gui_states.layerChannel.layer;
   }
 
   /**
    * Get the currently active channel value.
    */
   getActiveChannel(): number {
-    return this.gui_states.activeChannel;
+    return this.gui_states.layerChannel.activeChannel;
   }
 
   /**
    * Set visibility of a layer and re-render.
    */
   setLayerVisible(layerId: string, visible: boolean): void {
-    this.gui_states.layerVisibility[layerId] = visible;
+    this.gui_states.layerChannel.layerVisibility[layerId] = visible;
     this.reloadMasksFromVolume();
   }
 
@@ -535,15 +540,15 @@ export class NrrdTools extends DrawToolCore {
    * Check if a layer is visible.
    */
   isLayerVisible(layerId: string): boolean {
-    return this.gui_states.layerVisibility[layerId] ?? true;
+    return this.gui_states.layerChannel.layerVisibility[layerId] ?? true;
   }
 
   /**
    * Set visibility of a specific channel within a layer and re-render.
    */
   setChannelVisible(layerId: string, channel: ChannelValue, visible: boolean): void {
-    if (this.gui_states.channelVisibility[layerId]) {
-      this.gui_states.channelVisibility[layerId][channel] = visible;
+    if (this.gui_states.layerChannel.channelVisibility[layerId]) {
+      this.gui_states.layerChannel.channelVisibility[layerId][channel] = visible;
     }
     this.reloadMasksFromVolume();
   }
@@ -552,14 +557,14 @@ export class NrrdTools extends DrawToolCore {
    * Check if a specific channel within a layer is visible.
    */
   isChannelVisible(layerId: string, channel: ChannelValue): boolean {
-    return this.gui_states.channelVisibility[layerId]?.[channel] ?? true;
+    return this.gui_states.layerChannel.channelVisibility[layerId]?.[channel] ?? true;
   }
 
   /**
    * Get the full layer visibility map.
    */
   getLayerVisibility(): Record<string, boolean> {
-    return { ...this.gui_states.layerVisibility };
+    return { ...this.gui_states.layerChannel.layerVisibility };
   }
 
   /**
@@ -567,8 +572,8 @@ export class NrrdTools extends DrawToolCore {
    */
   getChannelVisibility(): Record<string, Record<number, boolean>> {
     const result: Record<string, Record<number, boolean>> = {};
-    for (const layerId of this.nrrd_states.layers) {
-      result[layerId] = { ...this.gui_states.channelVisibility[layerId] };
+    for (const layerId of this.nrrd_states.image.layers) {
+      result[layerId] = { ...this.gui_states.layerChannel.channelVisibility[layerId] };
     }
     return result;
   }
@@ -620,7 +625,7 @@ export class NrrdTools extends DrawToolCore {
       return;
     }
     volume.setChannelColor(channel, color);
-    if (layerId === this.gui_states.layer && channel === this.gui_states.activeChannel) {
+    if (layerId === this.gui_states.layerChannel.layer && channel === this.gui_states.layerChannel.activeChannel) {
       this.syncBrushColor();
     }
     this.reloadMasksFromVolume();
@@ -679,7 +684,7 @@ export class NrrdTools extends DrawToolCore {
     for (const [ch, color] of Object.entries(colorMap)) {
       volume.setChannelColor(Number(ch), color as RGBAColor);
     }
-    if (layerId === this.gui_states.layer) {
+    if (layerId === this.gui_states.layerChannel.layer) {
       this.syncBrushColor();
     }
     this.reloadMasksFromVolume();
@@ -692,13 +697,13 @@ export class NrrdTools extends DrawToolCore {
    * @param color    RGBAColor object
    */
   setAllLayersChannelColor(channel: number, color: RGBAColor): void {
-    for (const layerId of this.nrrd_states.layers) {
+    for (const layerId of this.nrrd_states.image.layers) {
       const volume = this.protectedData.maskData.volumes[layerId];
       if (volume) {
         volume.setChannelColor(channel, color);
       }
     }
-    if (channel === this.gui_states.activeChannel) {
+    if (channel === this.gui_states.layerChannel.activeChannel) {
       this.syncBrushColor();
     }
     this.reloadMasksFromVolume();
@@ -718,7 +723,7 @@ export class NrrdTools extends DrawToolCore {
    * ```
    */
   resetChannelColors(layerId?: string, channel?: number): void {
-    const layers = layerId ? [layerId] : this.nrrd_states.layers;
+    const layers = layerId ? [layerId] : this.nrrd_states.image.layers;
     for (const lid of layers) {
       const volume = this.protectedData.maskData.volumes[lid];
       if (volume) {
@@ -907,26 +912,26 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.allSlicesArray = [...allSlices];
 
     const randomSlice = this.protectedData.allSlicesArray[0];
-    this.nrrd_states.nrrd_x_mm = randomSlice.z.canvas.width;
-    this.nrrd_states.nrrd_y_mm = randomSlice.z.canvas.height;
-    this.nrrd_states.nrrd_z_mm = randomSlice.x.canvas.width;
-    this.nrrd_states.nrrd_x_pixel = randomSlice.x.volume.dimensions[0];
-    this.nrrd_states.nrrd_y_pixel = randomSlice.x.volume.dimensions[1];
-    this.nrrd_states.nrrd_z_pixel = randomSlice.x.volume.dimensions[2];
+    this.nrrd_states.image.nrrd_x_mm = randomSlice.z.canvas.width;
+    this.nrrd_states.image.nrrd_y_mm = randomSlice.z.canvas.height;
+    this.nrrd_states.image.nrrd_z_mm = randomSlice.x.canvas.width;
+    this.nrrd_states.image.nrrd_x_pixel = randomSlice.x.volume.dimensions[0];
+    this.nrrd_states.image.nrrd_y_pixel = randomSlice.x.volume.dimensions[1];
+    this.nrrd_states.image.nrrd_z_pixel = randomSlice.x.volume.dimensions[2];
 
-    this.nrrd_states.voxelSpacing = randomSlice.x.volume.spacing;
-    this.nrrd_states.ratios.x = randomSlice.x.volume.spacing[0];
-    this.nrrd_states.ratios.y = randomSlice.x.volume.spacing[1];
-    this.nrrd_states.ratios.z = randomSlice.x.volume.spacing[2];
-    this.nrrd_states.dimensions = randomSlice.x.volume.dimensions;
+    this.nrrd_states.image.voxelSpacing = randomSlice.x.volume.spacing;
+    this.nrrd_states.image.ratios.x = randomSlice.x.volume.spacing[0];
+    this.nrrd_states.image.ratios.y = randomSlice.x.volume.spacing[1];
+    this.nrrd_states.image.ratios.z = randomSlice.x.volume.spacing[2];
+    this.nrrd_states.image.dimensions = randomSlice.x.volume.dimensions;
 
     // Phase 2 Day 9: Re-initialize MaskVolume with real NRRD dimensions.
     // This replaces the 1×1×1 placeholders from CommToolsData constructor
     // and "turns on" all Day 7/8 volume read/write paths.
     // Invalidate reusable buffer from previous dataset
     this.invalidateSliceBuffer();
-    const [vw, vh, vd] = this.nrrd_states.dimensions;
-    this.protectedData.maskData.volumes = this.nrrd_states.layers.reduce(
+    const [vw, vh, vd] = this.nrrd_states.image.dimensions;
+    this.protectedData.maskData.volumes = this.nrrd_states.image.layers.reduce(
       (acc, id) => {
         acc[id] = new MaskVolume(vw, vh, vd, 1);
         return acc;
@@ -937,16 +942,16 @@ export class NrrdTools extends DrawToolCore {
     // Create dedicated SphereMaskVolume for 3D sphere data.
     // Separate from layer volumes to avoid polluting draw mask data.
     // Cleared in reset() when switching cases.
-    this.nrrd_states.sphereMaskVolume = new MaskVolume(vw, vh, vd, 1);
+    this.nrrd_states.sphere.sphereMaskVolume = new MaskVolume(vw, vh, vd, 1);
     // Derive sphere label colors from SPHERE_CHANNEL_MAP → MASK_CHANNEL_COLORS
     // so that volume rendering matches the preview circle colors.
     for (const [type, { channel }] of Object.entries(SPHERE_CHANNEL_MAP)) {
       const label = SPHERE_LABELS[type as SphereType];
       const c = MASK_CHANNEL_COLORS[channel];
-      this.nrrd_states.sphereMaskVolume.setChannelColor(label, { r: c.r, g: c.g, b: c.b, a: c.a });
+      this.nrrd_states.sphere.sphereMaskVolume.setChannelColor(label, { r: c.r, g: c.g, b: c.b, a: c.a });
     }
 
-    this.nrrd_states.spaceOrigin = (
+    this.nrrd_states.image.spaceOrigin = (
       randomSlice.x.volume.header.space_origin as number[]
     ).map((item) => {
       return item * 1;
@@ -959,7 +964,7 @@ export class NrrdTools extends DrawToolCore {
     });
 
     // Phase 3: initPaintImages removed (MaskVolume initialized separately)
-    // this.initPaintImages(this.nrrd_states.dimensions);
+    // this.initPaintImages(this.nrrd_states.image.dimensions);
 
     // init displayslices array, the axis default is "z"
     this.setDisplaySlicesBaseOnAxis();
@@ -972,8 +977,8 @@ export class NrrdTools extends DrawToolCore {
     imageData: ImageData
   ) {
     let imageDataLable = this.protectedData.ctxes.emptyCtx.createImageData(
-      this.nrrd_states.nrrd_x_pixel,
-      this.nrrd_states.nrrd_y_pixel
+      this.nrrd_states.image.nrrd_x_pixel,
+      this.nrrd_states.image.nrrd_y_pixel
     );
     this.setEmptyCanvasSize();
     for (let j = 0; j < masks[index].data.length; j++) {
@@ -989,7 +994,7 @@ export class NrrdTools extends DrawToolCore {
     loadingBar?: loadingBarType
   ) {
     if (!!masksData) {
-      this.nrrd_states.loadingMaskData = true;
+      this.nrrd_states.flags.loadingMaskData = true;
       if (loadingBar) {
         let { loadingContainer, progress } = loadingBar;
         loadingContainer.style.display = "flex";
@@ -1001,8 +1006,8 @@ export class NrrdTools extends DrawToolCore {
       const len = masksData["layer1"].length;
       for (let i = 0; i < len; i++) {
         let imageData = this.protectedData.ctxes.emptyCtx.createImageData(
-          this.nrrd_states.nrrd_x_pixel,
-          this.nrrd_states.nrrd_y_pixel
+          this.nrrd_states.image.nrrd_x_pixel,
+          this.nrrd_states.image.nrrd_y_pixel
         );
         if (masksData["layer1"][i].data.length > 0) {
           this.loadingMaskByLayer(masksData["layer1"], i, imageData);
@@ -1018,7 +1023,7 @@ export class NrrdTools extends DrawToolCore {
         this.syncLayerSliceData(i, "default");
       }
 
-      this.nrrd_states.loadingMaskData = false;
+      this.nrrd_states.flags.loadingMaskData = false;
       this.executeAction("resetZoom");
       if (loadingBar) {
         loadingBar.loadingContainer.style.display = "none";
@@ -1079,18 +1084,18 @@ export class NrrdTools extends DrawToolCore {
   }
 
   private setShowInMainArea() {
-    this.nrrd_states.showContrast = true;
+    this.nrrd_states.view.showContrast = true;
   }
 
   getCurrentImageDimension() {
-    return this.nrrd_states.dimensions;
+    return this.nrrd_states.image.dimensions;
   }
 
   getVoxelSpacing() {
-    return this.nrrd_states.voxelSpacing;
+    return this.nrrd_states.image.voxelSpacing;
   }
   getSpaceOrigin() {
-    return this.nrrd_states.spaceOrigin;
+    return this.nrrd_states.image.spaceOrigin;
   }
   getMaskData(): IMaskData {
     return this.protectedData.maskData;
@@ -1098,15 +1103,15 @@ export class NrrdTools extends DrawToolCore {
 
   // set calculate distance sphere position
   setCalculateDistanceSphere(x: number, y: number, sliceIndex: number, cal_position: "tumour" | "skin" | "nipple" | "ribcage") {
-    this.nrrd_states.sphereRadius = 5;
+    this.nrrd_states.sphere.sphereRadius = 5;
 
     // move to tumour slice
-    const steps = sliceIndex - this.nrrd_states.currentSliceIndex;
+    const steps = sliceIndex - this.nrrd_states.view.currentSliceIndex;
     this.setSliceMoving(steps * this.protectedData.displaySlices.length)
 
     // mock mouse down
     // if user zoom the panel, we need to consider the size factor 
-    this.drawCalSphereDown(x * this.nrrd_states.sizeFoctor, y * this.nrrd_states.sizeFoctor, sliceIndex, cal_position);
+    this.drawCalSphereDown(x * this.nrrd_states.view.sizeFoctor, y * this.nrrd_states.view.sizeFoctor, sliceIndex, cal_position);
     // mock mouse up
     this.drawCalSphereUp()
 
@@ -1118,22 +1123,22 @@ export class NrrdTools extends DrawToolCore {
    *  */
   setSliceOrientation(axisTo: "x" | "y" | "z") {
     let convetObj;
-    if (this.eventRouter?.isCrosshairEnabled() || this.gui_states.sphere) {
+    if (this.eventRouter?.isCrosshairEnabled() || this.gui_states.mode.sphere) {
       if (this.protectedData.axis === "z") {
-        this.cursorPage.z.index = this.nrrd_states.currentSliceIndex;
-        this.cursorPage.z.cursorPageX = this.nrrd_states.cursorPageX;
-        this.cursorPage.z.cursorPageY = this.nrrd_states.cursorPageY;
+        this.cursorPage.z.index = this.nrrd_states.view.currentSliceIndex;
+        this.cursorPage.z.cursorPageX = this.nrrd_states.interaction.cursorPageX;
+        this.cursorPage.z.cursorPageY = this.nrrd_states.interaction.cursorPageY;
       } else if (this.protectedData.axis === "x") {
-        this.cursorPage.x.index = this.nrrd_states.currentSliceIndex;
-        this.cursorPage.x.cursorPageX = this.nrrd_states.cursorPageX;
-        this.cursorPage.x.cursorPageY = this.nrrd_states.cursorPageY;
+        this.cursorPage.x.index = this.nrrd_states.view.currentSliceIndex;
+        this.cursorPage.x.cursorPageX = this.nrrd_states.interaction.cursorPageX;
+        this.cursorPage.x.cursorPageY = this.nrrd_states.interaction.cursorPageY;
       } else if (this.protectedData.axis === "y") {
-        this.cursorPage.y.index = this.nrrd_states.currentSliceIndex;
-        this.cursorPage.y.cursorPageX = this.nrrd_states.cursorPageX;
-        this.cursorPage.y.cursorPageY = this.nrrd_states.cursorPageY;
+        this.cursorPage.y.index = this.nrrd_states.view.currentSliceIndex;
+        this.cursorPage.y.cursorPageX = this.nrrd_states.interaction.cursorPageX;
+        this.cursorPage.y.cursorPageY = this.nrrd_states.interaction.cursorPageY;
       }
       if (axisTo === "z") {
-        if (this.nrrd_states.isCursorSelect && !this.cursorPage.z.updated) {
+        if (this.nrrd_states.interaction.isCursorSelect && !this.cursorPage.z.updated) {
           if (this.protectedData.axis === "x") {
             // convert x to z
             convetObj = this.convertCursorPoint(
@@ -1156,14 +1161,14 @@ export class NrrdTools extends DrawToolCore {
           }
         } else {
           // not cursor select, freedom to switch x -> z or y -> z and z -> x or z -> y
-          this.nrrd_states.currentSliceIndex = this.cursorPage.z.index;
-          this.nrrd_states.preSliceIndex =
-            this.cursorPage.z.index * this.nrrd_states.ratios.z;
-          this.nrrd_states.cursorPageX = this.cursorPage.z.cursorPageX;
-          this.nrrd_states.cursorPageY = this.cursorPage.z.cursorPageY;
+          this.nrrd_states.view.currentSliceIndex = this.cursorPage.z.index;
+          this.nrrd_states.view.preSliceIndex =
+            this.cursorPage.z.index * this.nrrd_states.image.ratios.z;
+          this.nrrd_states.interaction.cursorPageX = this.cursorPage.z.cursorPageX;
+          this.nrrd_states.interaction.cursorPageY = this.cursorPage.z.cursorPageY;
         }
       } else if (axisTo === "x") {
-        if (this.nrrd_states.isCursorSelect && !this.cursorPage.x.updated) {
+        if (this.nrrd_states.interaction.isCursorSelect && !this.cursorPage.x.updated) {
 
           if (this.protectedData.axis === "z") {
             // convert z to x
@@ -1188,14 +1193,14 @@ export class NrrdTools extends DrawToolCore {
           }
         } else {
           // not cursor select, freedom to switch z -> x or y -> x and x -> z or x -> y
-          this.nrrd_states.currentSliceIndex = this.cursorPage.x.index;
-          this.nrrd_states.preSliceIndex =
-            this.cursorPage.x.index * this.nrrd_states.ratios.x;
-          this.nrrd_states.cursorPageX = this.cursorPage.x.cursorPageX;
-          this.nrrd_states.cursorPageY = this.cursorPage.x.cursorPageY;
+          this.nrrd_states.view.currentSliceIndex = this.cursorPage.x.index;
+          this.nrrd_states.view.preSliceIndex =
+            this.cursorPage.x.index * this.nrrd_states.image.ratios.x;
+          this.nrrd_states.interaction.cursorPageX = this.cursorPage.x.cursorPageX;
+          this.nrrd_states.interaction.cursorPageY = this.cursorPage.x.cursorPageY;
         }
       } else if (axisTo === "y") {
-        if (this.nrrd_states.isCursorSelect && !this.cursorPage.y.updated) {
+        if (this.nrrd_states.interaction.isCursorSelect && !this.cursorPage.y.updated) {
           if (this.protectedData.axis === "z") {
             // convert z to y
             convetObj = this.convertCursorPoint(
@@ -1218,20 +1223,20 @@ export class NrrdTools extends DrawToolCore {
           }
         } else {
           // not cursor select, freedom to switch z -> y or x -> y and y -> z or y -> x
-          this.nrrd_states.currentSliceIndex = this.cursorPage.y.index;
-          this.nrrd_states.preSliceIndex =
-            this.cursorPage.y.index * this.nrrd_states.ratios.y;
-          this.nrrd_states.cursorPageX = this.cursorPage.y.cursorPageX;
-          this.nrrd_states.cursorPageY = this.cursorPage.y.cursorPageY;
+          this.nrrd_states.view.currentSliceIndex = this.cursorPage.y.index;
+          this.nrrd_states.view.preSliceIndex =
+            this.cursorPage.y.index * this.nrrd_states.image.ratios.y;
+          this.nrrd_states.interaction.cursorPageX = this.cursorPage.y.cursorPageX;
+          this.nrrd_states.interaction.cursorPageY = this.cursorPage.y.cursorPageY;
         }
       }
 
       if (convetObj) {
         // update convert cursor point, when cursor select
-        this.nrrd_states.currentSliceIndex = convetObj.currentNewSliceIndex;
-        this.nrrd_states.preSliceIndex = convetObj.preSliceIndex;
-        this.nrrd_states.cursorPageX = convetObj.convertCursorNumX;
-        this.nrrd_states.cursorPageY = convetObj.convertCursorNumY;
+        this.nrrd_states.view.currentSliceIndex = convetObj.currentNewSliceIndex;
+        this.nrrd_states.view.preSliceIndex = convetObj.preSliceIndex;
+        this.nrrd_states.interaction.cursorPageX = convetObj.convertCursorNumX;
+        this.nrrd_states.interaction.cursorPageY = convetObj.convertCursorNumY;
 
         convetObj = undefined;
         switch (axisTo) {
@@ -1253,7 +1258,7 @@ export class NrrdTools extends DrawToolCore {
         this.cursorPage.z.updated
       ) {
         // one point convert to all axis, reset all updated status
-        this.nrrd_states.isCursorSelect = false;
+        this.nrrd_states.interaction.isCursorSelect = false;
       }
     }
 
@@ -1265,9 +1270,9 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.skipSlicesDic[index] =
       this.protectedData.backUpDisplaySlices[index];
     if (index >= this.protectedData.displaySlices.length) {
-      this.nrrd_states.contrastNum = this.protectedData.displaySlices.length;
+      this.nrrd_states.view.contrastNum = this.protectedData.displaySlices.length;
     } else {
-      this.nrrd_states.contrastNum = index;
+      this.nrrd_states.view.contrastNum = index;
     }
 
     this.resetDisplaySlicesStatus();
@@ -1275,7 +1280,7 @@ export class NrrdTools extends DrawToolCore {
 
   removeSkip(index: number) {
     this.protectedData.skipSlicesDic[index] = undefined;
-    this.nrrd_states.contrastNum = 0;
+    this.nrrd_states.view.contrastNum = 0;
     this.resetDisplaySlicesStatus();
   }
 
@@ -1294,7 +1299,7 @@ export class NrrdTools extends DrawToolCore {
     this.undoManager.clearAll();
 
     // Phase 3: Reset MaskVolume storage to 1×1×1 placeholders
-    this.protectedData.maskData.volumes = this.nrrd_states.layers.reduce(
+    this.protectedData.maskData.volumes = this.nrrd_states.image.layers.reduce(
       (acc, id) => {
         acc[id] = new MaskVolume(1, 1, 1, 1);
         return acc;
@@ -1303,14 +1308,14 @@ export class NrrdTools extends DrawToolCore {
     );
 
     // Clear dedicated SphereMaskVolume
-    this.nrrd_states.sphereMaskVolume = null;
+    this.nrrd_states.sphere.sphereMaskVolume = null;
 
     // Invalidate reusable slice buffer
     this.invalidateSliceBuffer();
 
     this.clearDictionary(this.protectedData.skipSlicesDic);
 
-    // this.nrrd_states.previousPanelL = this.nrrd_states.previousPanelT = -99999;
+    // this.nrrd_states.view.previousPanelL = this.nrrd_states.view.previousPanelT = -99999;
     this.protectedData.canvases.displayCanvas.style.left =
       this.protectedData.canvases.drawingCanvas.style.left = "";
     this.protectedData.canvases.displayCanvas.style.top =
@@ -1321,18 +1326,18 @@ export class NrrdTools extends DrawToolCore {
     this.protectedData.currentShowingSlice = undefined;
     this.initState = true;
     this.protectedData.axis = "z";
-    this.nrrd_states.sizeFoctor = this.baseCanvasesSize;
-    this.gui_states.mainAreaSize = this.baseCanvasesSize;
+    this.nrrd_states.view.sizeFoctor = this.baseCanvasesSize;
+    this.gui_states.viewConfig.mainAreaSize = this.baseCanvasesSize;
     this.resetLayerCanvas();
     this.protectedData.canvases.drawingCanvas.width =
       this.protectedData.canvases.drawingCanvas.width;
     this.protectedData.canvases.displayCanvas.width =
       this.protectedData.canvases.displayCanvas.width;
 
-    this.nrrd_states.tumourSphereOrigin = null;
-    this.nrrd_states.ribSphereOrigin = null;
-    this.nrrd_states.skinSphereOrigin = null;
-    this.nrrd_states.nippleSphereOrigin = null;
+    this.nrrd_states.sphere.tumourSphereOrigin = null;
+    this.nrrd_states.sphere.ribSphereOrigin = null;
+    this.nrrd_states.sphere.skinSphereOrigin = null;
+    this.nrrd_states.sphere.nippleSphereOrigin = null;
   }
 
   setSliceMoving(step: number) {
@@ -1357,14 +1362,14 @@ export class NrrdTools extends DrawToolCore {
   }
 
   setMainAreaSize(factor: number) {
-    this.nrrd_states.sizeFoctor = factor;
+    this.nrrd_states.view.sizeFoctor = factor;
 
-    if (this.nrrd_states.sizeFoctor >= 8) {
-      this.nrrd_states.sizeFoctor = 8;
-    } else if (this.nrrd_states.sizeFoctor <= 1) {
-      this.nrrd_states.sizeFoctor = 1;
+    if (this.nrrd_states.view.sizeFoctor >= 8) {
+      this.nrrd_states.view.sizeFoctor = 8;
+    } else if (this.nrrd_states.view.sizeFoctor <= 1) {
+      this.nrrd_states.view.sizeFoctor = 1;
     }
-    this.resizePaintArea(this.nrrd_states.sizeFoctor);
+    this.resizePaintArea(this.nrrd_states.view.sizeFoctor);
     this.resetPaintAreaUIPosition();
     // this.setIsDrawFalse(1000);
   }
@@ -1380,30 +1385,30 @@ export class NrrdTools extends DrawToolCore {
   }
 
   getMaxSliceNum(): number[] {
-    if (this.nrrd_states.showContrast) {
+    if (this.nrrd_states.view.showContrast) {
       return [
-        this.nrrd_states.maxIndex,
-        this.nrrd_states.maxIndex * this.protectedData.displaySlices.length,
+        this.nrrd_states.view.maxIndex,
+        this.nrrd_states.view.maxIndex * this.protectedData.displaySlices.length,
       ];
     } else {
-      return [this.nrrd_states.maxIndex];
+      return [this.nrrd_states.view.maxIndex];
     }
   }
   getCurrentSlicesNumAndContrastNum() {
     return {
-      currentSliceIndex: this.nrrd_states.currentSliceIndex,
-      contrastIndex: this.nrrd_states.contrastNum,
+      currentSliceIndex: this.nrrd_states.view.currentSliceIndex,
+      contrastIndex: this.nrrd_states.view.contrastNum,
     };
   }
 
   getCurrentSliceIndex() {
     return Math.ceil(
-      this.protectedData.mainPreSlices.index / this.nrrd_states.RSARatio
+      this.protectedData.mainPreSlices.index / this.nrrd_states.image.RSARatio
     );
   }
 
   getIsShowContrastState() {
-    return this.nrrd_states.showContrast;
+    return this.nrrd_states.view.showContrast;
   }
 
   /**
@@ -1479,37 +1484,39 @@ export class NrrdTools extends DrawToolCore {
     // (also calls resizePaintArea → reloads masks, resizes canvases)
     this.setOriginCanvasAndPre();
     // update the show number div on top area
-    this.dragOperator.updateShowNumDiv(this.nrrd_states.contrastNum);
+    this.dragOperator.updateShowNumDiv(this.nrrd_states.view.contrastNum);
     // repaint all contrast images
     this.repraintCurrentContrastSlice();
     // Refresh display after contrast repaint (no need for full resizePaintArea
     // since canvases were already resized in setOriginCanvasAndPre above)
     this.redrawDisplayCanvas();
     this.compositeAllLayers();
+    // Sync slider metadata with current volume (replaces old getGuiSettings() side-effect)
+    this.syncGuiParameterSettings();
   }
 
   private setMainPreSlice() {
     this.protectedData.mainPreSlices = this.protectedData.displaySlices[0];
     if (this.protectedData.mainPreSlices) {
-      this.nrrd_states.RSARatio = this.protectedData.mainPreSlices.RSARatio;
+      this.nrrd_states.image.RSARatio = this.protectedData.mainPreSlices.RSARatio;
     }
   }
 
   private setOriginCanvasAndPre() {
     if (this.protectedData.mainPreSlices) {
-      if (this.nrrd_states.preSliceIndex > this.nrrd_states.maxIndex)
-        this.nrrd_states.preSliceIndex = this.nrrd_states.maxIndex;
+      if (this.nrrd_states.view.preSliceIndex > this.nrrd_states.view.maxIndex)
+        this.nrrd_states.view.preSliceIndex = this.nrrd_states.view.maxIndex;
 
       if (this.initState) {
-        this.nrrd_states.preSliceIndex =
+        this.nrrd_states.view.preSliceIndex =
           this.protectedData.mainPreSlices.initIndex *
-          this.nrrd_states.RSARatio;
-        this.nrrd_states.currentSliceIndex =
+          this.nrrd_states.image.RSARatio;
+        this.nrrd_states.view.currentSliceIndex =
           this.protectedData.mainPreSlices.initIndex;
       } else {
         // !need to change
         // todo
-        this.protectedData.mainPreSlices.index = this.nrrd_states.preSliceIndex;
+        this.protectedData.mainPreSlices.index = this.nrrd_states.view.preSliceIndex;
       }
 
       this.protectedData.canvases.originCanvas =
@@ -1523,21 +1530,22 @@ export class NrrdTools extends DrawToolCore {
     this.setMainPreSlice();
     this.setOriginCanvasAndPre();
     this.protectedData.currentShowingSlice = this.protectedData.mainPreSlices;
-    this.nrrd_states.preSliceIndex =
-      this.protectedData.mainPreSlices.initIndex * this.nrrd_states.RSARatio;
-    this.nrrd_states.currentSliceIndex = this.protectedData.mainPreSlices.initIndex;
+    this.nrrd_states.view.preSliceIndex =
+      this.protectedData.mainPreSlices.initIndex * this.nrrd_states.image.RSARatio;
+    this.nrrd_states.view.currentSliceIndex = this.protectedData.mainPreSlices.initIndex;
     // Phase 6: Reset undo/redo stacks on new dataset load
     this.undoManager.clearAll();
 
     // compute max index
     this.updateMaxIndex();
-    this.dragOperator.updateShowNumDiv(this.nrrd_states.contrastNum);
+    this.dragOperator.updateShowNumDiv(this.nrrd_states.view.contrastNum);
+    this.syncGuiParameterSettings();
     this.initState = false;
   }
 
   private updateMaxIndex() {
     if (this.protectedData.mainPreSlices) {
-      this.nrrd_states.maxIndex = this.protectedData.mainPreSlices.MaxIndex;
+      this.nrrd_states.view.maxIndex = this.protectedData.mainPreSlices.MaxIndex;
     }
   }
 
@@ -1546,15 +1554,15 @@ export class NrrdTools extends DrawToolCore {
    * Then update the changedWidth and changedHeight based on the sizeFoctor.
    */
   updateOriginAndChangedWH() {
-    this.nrrd_states.originWidth =
+    this.nrrd_states.image.originWidth =
       this.protectedData.canvases.originCanvas.width;
-    this.nrrd_states.originHeight =
+    this.nrrd_states.image.originHeight =
       this.protectedData.canvases.originCanvas.height;
 
     // Let resizePaintArea be the sole setter of changedWidth/changedHeight.
     // Setting them here would defeat the sizeChanged detection in resizePaintArea,
     // causing canvas elements to keep stale dimensions after axis switches.
-    this.resizePaintArea(this.nrrd_states.sizeFoctor);
+    this.resizePaintArea(this.nrrd_states.view.sizeFoctor);
     this.resetPaintAreaUIPosition();
   }
 
@@ -1583,9 +1591,9 @@ export class NrrdTools extends DrawToolCore {
    */
   clearActiveLayer() {
     // Phase 3 Task 3.1: Only clear the active layer's MaskVolume
-    if (this.nrrd_states.dimensions.length === 3) {
-      const [w, h, d] = this.nrrd_states.dimensions;
-      const activeLayer = this.gui_states.layer;
+    if (this.nrrd_states.image.dimensions.length === 3) {
+      const [w, h, d] = this.nrrd_states.image.dimensions;
+      const activeLayer = this.gui_states.layerChannel.layer;
 
       // Re-init only the active layer's MaskVolume
       this.protectedData.maskData.volumes[activeLayer] = new MaskVolume(w, h, d, 1);
@@ -1655,9 +1663,9 @@ export class NrrdTools extends DrawToolCore {
     this.eventRouter?.setGuiTool('sphere');
 
     // Clear all layer canvases (NOT MaskVolumes — just visual canvas)
-    const w = this.nrrd_states.changedWidth;
-    const h = this.nrrd_states.changedHeight;
-    for (const layerId of this.nrrd_states.layers) {
+    const w = this.nrrd_states.view.changedWidth;
+    const h = this.nrrd_states.view.changedHeight;
+    for (const layerId of this.nrrd_states.image.layers) {
       const target = this.protectedData.layerTargets.get(layerId);
       if (target) {
         target.ctx.clearRect(0, 0, target.canvas.width, target.canvas.height);
@@ -1716,10 +1724,10 @@ export class NrrdTools extends DrawToolCore {
         this.protectedData.canvases.originCanvas,
         0,
         0,
-        this.nrrd_states.changedWidth,
-        this.nrrd_states.changedHeight
+        this.nrrd_states.view.changedWidth,
+        this.nrrd_states.view.changedHeight
       );
-      this.resizePaintArea(this.nrrd_states.sizeFoctor);
+      this.resizePaintArea(this.nrrd_states.view.sizeFoctor);
     }
   }
 
@@ -1728,10 +1736,10 @@ export class NrrdTools extends DrawToolCore {
    * @param factor number
    */
   resizePaintArea(factor: number) {
-    const newWidth = Math.floor(this.nrrd_states.originWidth * factor);
-    const newHeight = Math.floor(this.nrrd_states.originHeight * factor);
-    const sizeChanged = newWidth !== this.nrrd_states.changedWidth ||
-      newHeight !== this.nrrd_states.changedHeight;
+    const newWidth = Math.floor(this.nrrd_states.image.originWidth * factor);
+    const newHeight = Math.floor(this.nrrd_states.image.originHeight * factor);
+    const sizeChanged = newWidth !== this.nrrd_states.view.changedWidth ||
+      newHeight !== this.nrrd_states.view.changedHeight;
 
     // Always clear display/drawing/origin canvases (needed for contrast updates)
     this.protectedData.canvases.originCanvas.width =
@@ -1747,8 +1755,8 @@ export class NrrdTools extends DrawToolCore {
       // during contrast toggle (where size stays the same).
       this.resetLayerCanvas();
 
-      this.nrrd_states.changedWidth = newWidth;
-      this.nrrd_states.changedHeight = newHeight;
+      this.nrrd_states.view.changedWidth = newWidth;
+      this.nrrd_states.view.changedHeight = newHeight;
 
       this.protectedData.canvases.displayCanvas.width = newWidth;
       this.protectedData.canvases.displayCanvas.height = newHeight;
@@ -1784,17 +1792,17 @@ export class NrrdTools extends DrawToolCore {
   private reloadMasksFromVolume(): void {
     // When sphere mode is active, do NOT redraw layer masks.
     // Layer mask data should remain hidden until the user exits sphere mode.
-    if (this.gui_states.sphere) {
+    if (this.gui_states.mode.sphere) {
       return;
     }
 
     const axis = this.protectedData.axis;
-    let sliceIndex = this.nrrd_states.currentSliceIndex;
+    let sliceIndex = this.nrrd_states.view.currentSliceIndex;
 
     // Clamp sliceIndex to valid range for current axis
     // (currentSliceIndex may not be updated yet when switching axes)
     try {
-      const vol = this.getVolumeForLayer(this.nrrd_states.layers[0]);
+      const vol = this.getVolumeForLayer(this.nrrd_states.image.layers[0]);
       const dims = vol.getDimensions();
       const maxSlice = axis === "x" ? dims.width : axis === "y" ? dims.height : dims.depth;
       if (sliceIndex >= maxSlice) sliceIndex = maxSlice - 1;
@@ -1805,11 +1813,11 @@ export class NrrdTools extends DrawToolCore {
     const buffer = this.getOrCreateSliceBuffer(axis);
     if (!buffer) return;
 
-    const w = this.nrrd_states.changedWidth;
-    const h = this.nrrd_states.changedHeight;
+    const w = this.nrrd_states.view.changedWidth;
+    const h = this.nrrd_states.view.changedHeight;
 
     // Clear and render each layer using the shared buffer
-    for (const layerId of this.nrrd_states.layers) {
+    for (const layerId of this.nrrd_states.image.layers) {
       const target = this.protectedData.layerTargets.get(layerId);
       if (!target) continue;
       target.ctx.clearRect(0, 0, w, h);
@@ -1834,20 +1842,20 @@ export class NrrdTools extends DrawToolCore {
       this.protectedData.ctxes.displayCtx?.scale(-1, -1);
 
       this.protectedData.ctxes.displayCtx?.translate(
-        -this.nrrd_states.changedWidth,
-        -this.nrrd_states.changedHeight
+        -this.nrrd_states.view.changedWidth,
+        -this.nrrd_states.view.changedHeight
       );
     } else if (this.protectedData.axis === "z") {
       this.protectedData.ctxes.displayCtx?.scale(1, -1);
       this.protectedData.ctxes.displayCtx?.translate(
         0,
-        -this.nrrd_states.changedHeight
+        -this.nrrd_states.view.changedHeight
       );
     } else if (this.protectedData.axis === "y") {
       this.protectedData.ctxes.displayCtx?.scale(1, -1);
       this.protectedData.ctxes.displayCtx?.translate(
         0,
-        -this.nrrd_states.changedHeight
+        -this.nrrd_states.view.changedHeight
       );
     }
   }
@@ -1867,21 +1875,21 @@ export class NrrdTools extends DrawToolCore {
     switch (!!axis ? axis : this.protectedData.axis) {
       case "x":
         this.protectedData.canvases.emptyCanvas.width =
-          this.nrrd_states.nrrd_z_pixel;
+          this.nrrd_states.image.nrrd_z_pixel;
         this.protectedData.canvases.emptyCanvas.height =
-          this.nrrd_states.nrrd_y_pixel;
+          this.nrrd_states.image.nrrd_y_pixel;
         break;
       case "y":
         this.protectedData.canvases.emptyCanvas.width =
-          this.nrrd_states.nrrd_x_pixel;
+          this.nrrd_states.image.nrrd_x_pixel;
         this.protectedData.canvases.emptyCanvas.height =
-          this.nrrd_states.nrrd_z_pixel;
+          this.nrrd_states.image.nrrd_z_pixel;
         break;
       case "z":
         this.protectedData.canvases.emptyCanvas.width =
-          this.nrrd_states.nrrd_x_pixel;
+          this.nrrd_states.image.nrrd_x_pixel;
         this.protectedData.canvases.emptyCanvas.height =
-          this.nrrd_states.nrrd_y_pixel;
+          this.nrrd_states.image.nrrd_y_pixel;
         break;
     }
   }
@@ -1912,8 +1920,8 @@ export class NrrdTools extends DrawToolCore {
         this.protectedData.currentShowingSlice.canvas,
         0,
         0,
-        this.nrrd_states.changedWidth,
-        this.nrrd_states.changedHeight
+        this.nrrd_states.view.changedWidth,
+        this.nrrd_states.view.changedHeight
       );
       this.protectedData.ctxes.displayCtx?.restore();
     }

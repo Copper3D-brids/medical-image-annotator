@@ -61,7 +61,7 @@ export const setTumourStudyPointPosition = (
     nrrdTools: Copper.NrrdTools,
     point: TTumourCenter,
     status: "tumour" | "nipple" | "skin" | "ribcage") => {
-    const spacing = nrrdTools.nrrd_states.voxelSpacing
+    const spacing = nrrdTools.getVoxelSpacing()
     // Note: the tumour center we recieve is in mm, we need to convert it to (pixel, pixel, mm) in Axial view
     // pixel / spacing = mm
     // mm * spacing = pixel

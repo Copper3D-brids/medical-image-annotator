@@ -15,7 +15,7 @@ export class CrosshairTool extends BaseTool {
   // ===== Crosshair Enable =====
 
   enableCrosshair(): void {
-    this.ctx.nrrd_states.isCursorSelect = true;
+    this.ctx.nrrd_states.interaction.isCursorSelect = true;
     switch (this.ctx.protectedData.axis) {
       case "x":
         this.ctx.cursorPage.x.updated = true;
@@ -59,10 +59,10 @@ export class CrosshairTool extends BaseTool {
     cursorNumY: number,
     currentSliceIndex: number
   ): IConvertObjType | undefined {
-    const nrrd = this.ctx.nrrd_states;
-    const dimensions = nrrd.dimensions;
-    const ratios = nrrd.ratios;
-    const { nrrd_x_mm, nrrd_y_mm, nrrd_z_mm } = nrrd;
+    const image = this.ctx.nrrd_states.image;
+    const dimensions = image.dimensions;
+    const ratios = image.ratios;
+    const { nrrd_x_mm, nrrd_y_mm, nrrd_z_mm } = image;
 
     let currentNewSliceIndex = 0;
     let preSliceIndex = 0;
@@ -167,12 +167,12 @@ export class CrosshairTool extends BaseTool {
 
     const { axisTo1, axisTo2 } = axisConversions[this.ctx.protectedData.axis];
 
-    this.ctx.nrrd_states.sphereOrigin[axisTo1] = [
+    this.ctx.nrrd_states.sphere.sphereOrigin[axisTo1] = [
       convertCursor(this.ctx.protectedData.axis, axisTo1).convertCursorNumX,
       convertCursor(this.ctx.protectedData.axis, axisTo1).convertCursorNumY,
       convertCursor(this.ctx.protectedData.axis, axisTo1).currentNewSliceIndex,
     ];
-    this.ctx.nrrd_states.sphereOrigin[axisTo2] = [
+    this.ctx.nrrd_states.sphere.sphereOrigin[axisTo2] = [
       convertCursor(this.ctx.protectedData.axis, axisTo2).convertCursorNumX,
       convertCursor(this.ctx.protectedData.axis, axisTo2).convertCursorNumY,
       convertCursor(this.ctx.protectedData.axis, axisTo2).currentNewSliceIndex,

@@ -104,7 +104,7 @@ const eraserUrls = getEraserUrlsForOffLine();
 const cursorUrls = getCursorUrlsForOffLine();
 
 // trial variables
-let toolNrrdStates: Copper.INrrdStates;
+let toolNrrdStates: Copper.NrrdState;
 
 // core load images variables
 let allSlices: Array<any> = [];
