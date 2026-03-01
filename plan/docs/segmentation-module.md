@@ -10,9 +10,12 @@
 
 ```
 CommToolsData          ← 基类：Canvas 管理、状态初始化、渲染管线
-  └── DrawToolCore     ← 绘画事件处理、Undo/Redo、Tool 管理
+  └── DrawToolCore     ← 事件编排（orchestration）、Undo/Redo、Tool 初始化与委托
        └── NrrdTools   ← 对外暴露的 API 入口，拖拽、数据加载
 ```
+
+> **注意**: DrawToolCore 现在是纯编排层 — 所有工具逻辑已提取到各 Tool 类中。
+> DrawToolCore 只负责事件监听器的绑定/移除和在 `start()` render loop 中调度各 Tool 的渲染方法。
 
 - [CommToolsData.ts](annotator-frontend/src/ts/Utils/segmentation/CommToolsData.ts) — 基类
 - [DrawToolCore.ts](annotator-frontend/src/ts/Utils/segmentation/DrawToolCore.ts) — 绘画核心
@@ -695,13 +698,13 @@ abstract class BaseTool {
 
 | Tool | 文件 | 说明 |
 |------|------|------|
-| **SphereTool** | [tools/SphereTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/SphereTool.ts) | 3D 球形标注工具，支持 4 种类型 (tumour/skin/ribcage/nipple)，各映射到 layer1 的指定 channel |
-| **CrosshairTool** | [tools/CrosshairTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/CrosshairTool.ts) | 十字准星位置标记 |
+| **SphereTool** | [tools/SphereTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/SphereTool.ts) | 3D 球形标注工具，支持 4 种类型 (tumour/skin/ribcage/nipple)，包含点击放置 (`onSphereClick`) 和松开完成 (`onSpherePointerUp`) |
+| **CrosshairTool** | [tools/CrosshairTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/CrosshairTool.ts) | 十字准星位置标记、坐标转换、crosshair 渲染 (`renderCrosshair`) |
 | **ContrastTool** | [tools/ContrastTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/ContrastTool.ts) | 窗位/窗宽调节 |
 | **ZoomTool** | [tools/ZoomTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/ZoomTool.ts) | 缩放/平移 |
 | **EraserTool** | [tools/EraserTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/EraserTool.ts) | 橡皮擦 |
 | **PanTool** | [tools/PanTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/PanTool.ts) | 右键拖拽平移画布（从 DrawToolCore 提取，Phase 2）|
-| **DrawingTool** | [tools/DrawingTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/DrawingTool.ts) | 铅笔/画笔/橡皮擦绘画逻辑（从 DrawToolCore 提取，Phase 3）|
+| **DrawingTool** | [tools/DrawingTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/DrawingTool.ts) | 铅笔/画笔/橡皮擦绘画逻辑，含笔刷 hover 追踪 (`createBrushTrackingHandler`) 和圆圈预览 (`renderBrushPreview`) |
 | **ImageStoreHelper** | [tools/ImageStoreHelper.ts](annotator-frontend/src/ts/Utils/segmentation/tools/ImageStoreHelper.ts) | Canvas↔Volume 同步 |
 | **DragSliceTool** | [tools/DragSliceTool.ts](annotator-frontend/src/ts/Utils/segmentation/tools/DragSliceTool.ts) | 拖拽切换切片 |
 
@@ -742,6 +745,24 @@ const SPHERE_LABELS: Record<SphereType | 'default', number>;
 | `getChannelForSphereType` | `(type: SphereType): number` | 获取 sphere 类型对应的 channel 号 |
 | `getLayerForSphereType` | `(type: SphereType): string` | 获取 sphere 类型对应的 layer ID |
 | `getColorForSphereType` | `(type: SphereType): string` | 获取 sphere 类型对应的预览颜色 |
+
+#### 交互方法（从 DrawToolCore 提取）
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `onSphereClick` | `(e: MouseEvent): void` | 左键点击：记录 origin、存储类型 origin、启用 crosshair、绘制预览圆。事件绑定（wheel/pointerup）留在 DrawToolCore |
+| `onSpherePointerUp` | `(): void` | 左键松开：写入所有 sphere 到 volume、刷新 overlay、触发 `onSphereChanged` + `onCalculatorPositionsChanged` 回调。事件清理留在 DrawToolCore |
+
+#### SphereCallbacks 接口
+
+```ts
+interface SphereCallbacks {
+  setEmptyCanvasSize: (axis?: "x" | "y" | "z") => void;
+  drawImageOnEmptyImage: (canvas: HTMLCanvasElement) => void;
+  enableCrosshair: () => void;
+  setUpSphereOrigins: (mouseX: number, mouseY: number, sliceIndex: number) => void;
+}
+```
 
 #### 使用边界
 
@@ -855,6 +876,8 @@ interface DrawingCallbacks {
 | `onPointerMove(e)` | 移动：橡皮擦分支用 clearArcFn，绘画分支积累路径并调用 paintOnCanvasLayer |
 | `onPointerUp(e)` | 左键松开：铅笔 fill/画笔 closePath、syncLayerSliceData、pushUndoDelta |
 | `onPointerLeave()` | canvas 离开：重置状态，**返回 `boolean`** 表示是否有未完成绘画 |
+| `createBrushTrackingHandler()` | 返回 mouseover/mouseout/mousemove handler，追踪 mouseOverX/Y 和 mouseOver 状态 |
+| `renderBrushPreview(ctx, w, h)` | 在 draw 模式渲染笔刷圆圈预览（start() render loop 调用） |
 
 #### onPointerLeave 返回值约定
 
