@@ -1,6 +1,6 @@
 # Issue 2: Event Lifecycle Refactor — Task List
 
-> **Status:** Not Started
+> **Status:** ✅ Done
 > **Plan:** [issue2_event_lifecycle_plan.md](issue2_event_lifecycle_plan.md)
 > **Files:** `DrawToolCore.ts`, `EventRouter.ts`
 
@@ -10,7 +10,9 @@
 
 ### 1.1 提取 pointerleave 逻辑为独立方法
 - [ ] 在 DrawToolCore 中新增 `private handlePointerLeave(): void`
-- [ ] 将 `paintOnCanvas()` L496-518 的 pointerleave 闭包内容（`wasDrawing` 判断 + cleanup 调用）移入该方法
+- [ ] 将 `paintOnCanvas()` L496-518 的 pointerleave 闭包内容移入该方法
+- [ ] **不保留**内部的 `removeEventListener` 调用（pointermove 和 wheel 将由 EventRouter 永久路由）
+- [ ] 在 `wasDrawing` 分支中添加 `this.activeWheelMode = 'zoom'`（替代原 removeEventListener sphere wheel）
 
 ### 1.2 在 initDrawToolCore() 注册三个 handler
 - [ ] 在 `this.eventRouter.bindAll()` 调用**之前**添加：
@@ -18,7 +20,10 @@
   - `this.eventRouter.setPointerUpHandler(...)` → 调用 `handleOnDrawingMouseUp`
   - `this.eventRouter.setPointerLeaveHandler(...)` → 调用 `this.handlePointerLeave()`
 
-### 1.3 编译检查
+### 1.3 同时删除旧 pointerleave 监听器
+- [ ] 删除 `paintOnCanvas()` L496-518 的 `canvas.addEventListener("pointerleave", () => { ... })` 块（必须与 1.1/1.2 在同一 commit，否则每次 `draw()` 调用会累积的匿名闭包监听器，造成内存泄漏）
+
+### 1.4 编译检查
 - [ ] `npx tsc --noEmit` — 无新增错误
 
 ---
@@ -66,23 +71,22 @@
 - [ ] 替换 L475-478（add zoom wheel，crosshair+sphere 结束）→ `this.activeWheelMode = 'zoom'`
 - [ ] 删除 L479-483（remove `pointerup`）
 
-### 3.4 删除 pointerleave 直接 add（L496-518）
-- [ ] 删除整个 `canvas.addEventListener("pointerleave", () => { ... })` 块（已由 Phase 1 的 handler 替代）
-
-### 3.5 清理 handleSphereClick 内的手动 add/remove
+### 3.4 清理 handleSphereClick 内的手动 add/remove
 - [ ] 替换 L584-587（remove zoom wheel）→ `this.activeWheelMode = 'sphere'`
 - [ ] 删除 L593-596（手动 add sphere wheel）
 - [ ] 删除 L597-601（手动 add `pointerup`）
 
-### 3.6 编译检查
+### 3.5 编译检查
 - [ ] `npx tsc --noEmit` — 无新增错误
 
 ---
 
-## Phase 4 — 删除 Legacy Fallback
+## Phase 4 — 删除 Legacy Fallback + 类型修正
 
 - [ ] 删除 `paintOnCanvas()` L416-427 中的 `else` 分支（无 EventRouter 时的旧 pointerdown 注册）
 - [ ] 将 `if (this.eventRouter)` 守卫改为直接调用（eventRouter 构造时必须存在）
+- [ ] 修改字段声明（L54）：`protected eventRouter: EventRouter | null = null` → `protected eventRouter!: EventRouter`
+- [ ] 移除代码中所有 `this.eventRouter?.` 可选链调用，改为 `this.eventRouter.`
 - [ ] `npx tsc --noEmit` — 无新增错误
 
 ---
