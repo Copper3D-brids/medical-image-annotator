@@ -149,9 +149,24 @@ Per-layer 自定义 channel 颜色。每个 layer 的 MaskVolume 有独立的 `c
 #### 外部使用方式
 
 **前提**: `nrrdTools` 实例已创建，且 `setAllSlices()` 已调用完毕（即图像已加载，MaskVolume 已初始化）。
- 
-> ⚠️ **重要**: 必须在图像加载完成（`setAllSlices()` 调用后）才能设置颜色，否则 MaskVolume 尚未创建，调用会静默失败（`console.warn`）。
- 
+
+> ⚠️ **重要**: 必须在图像加载完成（`setAllSlices()` 调用后）才能设置颜色，否则 `protectedData.maskData.volumes[layerId]` 为 `undefined`，调用会在方法内部触发 `console.warn` 后直接 `return`，静默失败，无任何视觉变化。
+>
+> **常见错误**：在 `onFinishedCopperInit` 回调中调用 `setChannelColor`。该回调仅表示 Copper3D 渲染器初始化完毕，此时还没有加载任何影像文件，`volumes["layer1"]` 不存在。
+>
+> ```typescript
+> // ❌ 错误：调用时机过早，MaskVolume 尚未创建
+> const onFinishedCopperInit = (data) => {
+>   nrrdTools.value = data.nrrdTools;
+>   nrrdTools.value.setChannelColor('layer1', 1, { r: 25, g: 0, b: 0, a: 255 }); // 静默失败
+> };
+>
+> // ✅ 正确：在图像加载完成后调用（setAllSlices() 已在此之前执行）
+> const handleAllImagesLoaded = (res) => {
+>   nrrdTools.value.setChannelColor('layer1', 1, { r: 25, g: 0, b: 0, a: 255 }); // 生效
+> };
+> ```
+
 ---
 
 **场景 1：给某个 Layer 的某个 Channel 设置自定义颜色**

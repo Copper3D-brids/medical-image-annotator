@@ -14,36 +14,60 @@ const filesPathToExclude = filesNeedToExclude.map((src) =>
 
 export default defineConfig(({ command, mode }) => {
   const isBuild = command === 'build'
+  const isPluginBuild = process.env.BUILD_AS_PLUGIN === 'true'
+  const isAppBuild = isBuild && !isPluginBuild
 
   return {
+    experimental: isPluginBuild ? {
+      renderBuiltUrl(filename, { hostType }) {
+        if (hostType === 'js') {
+          return {
+            runtime: `(function() {
+              try {
+                if (document.currentScript && document.currentScript.src) {
+                  return document.currentScript.src.substring(0, document.currentScript.src.lastIndexOf('/') + 1) + ${JSON.stringify(filename)};
+                }
+                if (window.__ANNOTATOR_BASE_PATH__) {
+                  return window.__ANNOTATOR_BASE_PATH__ + ${JSON.stringify(filename)};
+                }
+                return ${JSON.stringify('/annotator-frontend/' + filename)};
+              } catch (e) {
+                return window.__ANNOTATOR_BASE_PATH__ ? (window.__ANNOTATOR_BASE_PATH__ + ${JSON.stringify(filename)}) : ${JSON.stringify('/annotator-frontend/' + filename)};
+              }
+            })()`
+          };
+        }
+        return { relative: true };
+      }
+    } : undefined,
     plugins: [
       vue(
         isBuild
           ? {}
           : {
-              template: {
-                transformAssetUrls,
-                compilerOptions: {
-                  isCustomElement: (tag) => tag.startsWith("ion-"),
-                },
+            template: {
+              transformAssetUrls,
+              compilerOptions: {
+                isCustomElement: (tag) => tag.startsWith("ion-"),
               },
-            }
+            },
+          }
       ),
-      ...(isBuild
+      vueJsx(),
+      ...(isPluginBuild
         ? [
-            vueJsx(),
-            cssInjected(),
-            replaceNamedImportsFromGlobals({
-              pinia: ["defineStore", "storeToRefs"],
-              vuetify: ["useTheme"],
-            }),
-          ]
+          cssInjected(),
+          replaceNamedImportsFromGlobals({
+            pinia: { globalName: 'Pinia', symbols: ["defineStore", "storeToRefs"] },
+            vuetify: { globalName: 'Vuetify', symbols: ["useTheme"] },
+          }),
+        ]
         : [
-            vuetify({
-              autoImport: true,
-              styles: { configFile: "src/styles/settings.scss" },
-            }),
-          ]),
+          vuetify({
+            autoImport: true,
+            styles: { configFile: "src/styles/settings.scss" },
+          }),
+        ]),
       glslify({
         include: ["**/*.vs", "**/*.fs", "**/*.vert", "**/*.frag", "**/*.glsl"],
         exclude: "node_modules/**",
@@ -54,6 +78,7 @@ export default defineConfig(({ command, mode }) => {
       "process.env": {
         BASE_URL: "/",
       },
+      __IS_PLUGIN__: isPluginBuild,
     },
     resolve: {
       alias: {
@@ -61,39 +86,39 @@ export default defineConfig(({ command, mode }) => {
       },
       extensions: [".js", ".json", ".jsx", ".mjs", ".ts", ".tsx", ".vue"],
     },
-    base: "/",
-    build: isBuild
+    base: isPluginBuild ? "" : "/",
+    build: isPluginBuild
       ? {
-          lib: {
-            entry: './src/index.ts',
-            name: 'SegmentationApp',
-            formats: ['umd'],
-            fileName: (format) => `my-app.${format}.js`,
-          },
-          rollupOptions: {
-            external: ['vue', 'vuetify', 'pinia'],
-            output: {
-              globals: {
-                vue: 'Vue',
-                vuetify: 'Vuetify',
-                pinia: 'Pinia',
-              },
+        lib: {
+          entry: './src/index.ts',
+          name: 'SegmentationApp',
+          formats: ['umd'],
+          fileName: (format) => `my-app.${format}.js`,
+        },
+        rollupOptions: {
+          external: ['vue', 'vuetify', 'pinia'],
+          output: {
+            globals: {
+              vue: 'Vue',
+              vuetify: 'Vuetify',
+              pinia: 'Pinia',
             },
           },
-        }
-      : {
-          outDir: "./build",
-          rollupOptions: {
-            external: [...filesPathToExclude],
-          },
         },
+      }
+      : {
+        outDir: "./build",
+        rollupOptions: {
+          external: [...filesPathToExclude],
+        },
+      },
     optimizeDeps: isBuild
       ? {}
       : {
-          exclude: [
-            '@vuetify/loader-shared/runtime',
-            'vuetify',
-          ],
-        },
+        exclude: [
+          '@vuetify/loader-shared/runtime',
+          'vuetify',
+        ],
+      },
   }
 })

@@ -516,6 +516,39 @@ if (nrrdTools.hasLayerData('layer2')) {
 
 Each layer has its own independent color map. Changing channel 3's color in `layer1` does **not** affect `layer2`.
 
+#### ⚠️ Timing Requirement — Must call AFTER `setAllSlices()`
+
+Color APIs require `MaskVolume` instances to exist inside `protectedData.maskData.volumes`. Calling them before `setAllSlices()` completes results in a **silent no-op** — the method hits the guard check, emits `console.warn`, and returns without doing anything. There is no thrown exception and no visible error.
+
+```typescript
+// ❌ WRONG — onFinishedCopperInit fires when the Copper3D renderer is ready,
+//            but no NRRD images have been loaded yet.
+//            protectedData.maskData.volumes["layer1"] is undefined at this point.
+//            setChannelColor silently returns with only a console.warn.
+const onFinishedCopperInit = (copperInitData) => {
+  nrrdTools.value = copperInitData.nrrdTools;
+  nrrdTools.value.setChannelColor('layer1', 1, { r: 25, g: 0, b: 0, a: 255 }); // ← no-op
+};
+
+// ✅ CORRECT — call after images are fully loaded and setAllSlices() has run
+const handleAllImagesLoaded = (res) => {
+  // setAllSlices() is called internally before this callback fires
+  nrrdTools.value.setChannelColor('layer1', 1, { r: 25, g: 0, b: 0, a: 255 }); // ← works
+};
+```
+
+The internal guard inside `LayerChannelManager.setChannelColor()` (and all other color APIs) is:
+
+```typescript
+const volume = this.protectedData.maskData.volumes[layerId];
+if (!volume) {
+  console.warn(`setChannelColor: unknown layer "${layerId}"`); // fires silently
+  return;  // exits — color is never applied
+}
+```
+
+`MaskVolumes` are created (with correct voxel dimensions) only inside `DataLoader.setAllSlices()`. Until that runs, the volumes map is empty.
+
 #### Default Channel Colors
 
 | Channel | Color | Hex |

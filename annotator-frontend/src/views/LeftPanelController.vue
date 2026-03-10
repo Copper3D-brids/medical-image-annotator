@@ -239,7 +239,8 @@ const handleAllImagesLoaded = async (res: IToolAfterLoadImagesResponse) => {
   // Store slices
   caseManagement.handleAllImagesLoaded(res);
   displaySlicesLength = res.allSlices.length;
-
+  // Set channel color (for debug, can be removed later)
+  // (nrrdTools.value as Copper.NrrdTools).setChannelColor("layer1", 1, { r: 25, g: 0, b: 0, a:255 });
   // Set file count FIRST (needed for slider calculation)
   sliceNav.currentCaseContractsCount.value = res.allSlices.length;
 
