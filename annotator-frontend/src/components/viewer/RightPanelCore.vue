@@ -168,6 +168,7 @@ function initScene(name: string) {
     controls.rotateSpeed = 3.5;
     controls.panSpeed = 0.5;
 
+    console.log("Copper nrrdViewDefault initialized:", nrrdViewDefault);
     //update camera views
     copperScene.loadView(nrrdViewDefault);
 
