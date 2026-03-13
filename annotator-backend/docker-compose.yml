@@ -14,13 +14,16 @@ services:
     restart: unless-stopped
     volumes:
       - digitaltwins_portal_datasets:/annotator_gui_backend/data
-      - ./outputs:/annotator_gui_backend/outputs
+      - annotator_outputs:/annotator_gui_backend/outputs
     networks:
       - digitaltwins
 
 volumes:
   digitaltwins_portal_datasets:
     external: true
+  annotator_outputs:
+    name: digitaltwins_annotator_outputs
+    driver: local
 networks:
   digitaltwins:
     external: true
