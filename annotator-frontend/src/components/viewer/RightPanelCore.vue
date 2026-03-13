@@ -46,6 +46,9 @@ import "copper3d/dist/css/style.css";
 import { ref, onMounted } from 'vue'
 import loadingGif from "@/assets/loading.svg";
 import { PanelOperationManager, valideClock, deepClone, processPointsCloud } from "@/plugins/view-utils/utils-right";
+import nrrdViewDefault from "@/../public/nrrd_view.json";
+import nrrdViewSagittal from "@/../public/nrrd_view_sagittal.json";
+import nrrdViewCoronal from "@/../public/nrrd_view_coronal.json";
 
 defineProps({
     showBottomNavBar:{
@@ -166,7 +169,7 @@ function initScene(name: string) {
     controls.panSpeed = 0.5;
 
     //update camera views
-    copperScene.loadViewUrl("/nrrd_view.json");
+    copperScene.loadView(nrrdViewDefault);
 
     // Config threejs environment background
     // copperScene.updateBackground("#8b6d96", "#18e5e5");
@@ -319,7 +322,7 @@ function onNavBarDoubleClick(view: string, loadNrrdMeshes: Copper.nrrdMeshesType
       loadNrrdMeshes.y.visible = false;
       loadNrrdMeshes.z.visible = false;
       panelOperator.setSlicePrams(loadNrrdSlices.x);
-      copperScene.loadViewUrl("/nrrd_view_sagittal.json");
+      copperScene.loadView(nrrdViewSagittal);
       break;
 
     case "axial":
@@ -327,7 +330,7 @@ function onNavBarDoubleClick(view: string, loadNrrdMeshes: Copper.nrrdMeshesType
       loadNrrdMeshes.y.visible = false;
       loadNrrdMeshes.z.visible = true;
       panelOperator.setSlicePrams(loadNrrdSlices.z);
-      copperScene.loadViewUrl("/nrrd_view.json");
+      copperScene.loadView(nrrdViewDefault);
       break;
 
     case "coronal":
@@ -335,7 +338,7 @@ function onNavBarDoubleClick(view: string, loadNrrdMeshes: Copper.nrrdMeshesType
       loadNrrdMeshes.y.visible = true;
       loadNrrdMeshes.z.visible = false;
       panelOperator.setSlicePrams(loadNrrdSlices.y);
-      copperScene.loadViewUrl("/nrrd_view_coronal.json");
+      copperScene.loadView(nrrdViewCoronal);
       break;
   }
 }
@@ -350,7 +353,7 @@ const backTo3DView = (loadNrrdMeshes: Copper.nrrdMeshesType)=>{
 }
 
 const resetNrrdImageView = (loadNrrdMeshes: Copper.nrrdMeshesType) => {
-  copperScene.loadViewUrl("/nrrd_view.json");
+  copperScene.loadView(nrrdViewDefault);
   copperScene.controls.reset();
   backTo3DView(loadNrrdMeshes);
   emit("update:resetNrrdImageView", { loadNrrdMeshes });
