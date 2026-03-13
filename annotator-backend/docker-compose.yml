@@ -8,7 +8,14 @@ services:
     restart: unless-stopped
     volumes:
       - digitaltwins_portal_datasets:/annotator_gui_backend/data
+    networks:
+      - digitaltwins
 
 volumes:
   digitaltwins_portal_datasets:
     external: true
+
+networks:
+  digitaltwins:
+    external: true
+    name: digitaltwins

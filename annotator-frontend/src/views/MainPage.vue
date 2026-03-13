@@ -16,7 +16,7 @@ import LeftPanel from "./LeftPanelController.vue";
 import RightPanel from "./RightPanelController.vue";
 import {useToolConfig} from "@/plugins/api/index";
 // need to remove this after testing
-import toolConfig from "@/assets/tool_config.json";
+// import toolConfig from "@/assets/tool_config.json";
 import { IToolConfig } from "@/models";
 import { useAppConfig } from "@/plugins/hooks/config";
 import { useSegmentationCasesStore } from "@/store/app";
@@ -24,7 +24,7 @@ import { useSegmentationCasesStore } from "@/store/app";
 const { setPluginReady } = useSegmentationCasesStore();
 const layoutTwoPanelsRef = ref<InstanceType<typeof LayoutTwoPanels>>();
 // need to remove this after testing
-localStorage.setItem("app_config", JSON.stringify(toolConfig));
+// localStorage.setItem("app_config", JSON.stringify(toolConfig));
 
 const { config } = useAppConfig();
 
