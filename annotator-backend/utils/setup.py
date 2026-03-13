@@ -42,10 +42,11 @@ def get_external_base_url() -> str | None:
 
     # Auto-detect scheme if not explicitly set
     if not scheme:
-        if host in ("localhost", "127.0.0.1", "0.0.0.0"):
-            scheme = "http"
-        else:
+        use_ssl = os.environ.get("USE_SSL", "false").lower() in ("true", "1", "yes")
+        if use_ssl:
             scheme = "https"
+        else:
+            scheme = "http"
 
     netloc = f"{host}:{port}" if port else host
     return f"{scheme}://{netloc}"
