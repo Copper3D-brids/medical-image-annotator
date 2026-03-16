@@ -1,4 +1,3 @@
-// import * as Copper from "@/ts/index";
 import * as Copper from "copper3d";
 import { ILoadedMeshes } from "./segmentation";
 

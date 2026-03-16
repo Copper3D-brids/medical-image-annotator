@@ -1,5 +1,17 @@
 /// <reference types="vite/client" />
 
+declare const __IS_PLUGIN__: boolean;
+
+interface ImportMetaEnv {
+  readonly VITE_PLUGIN_ROUTE_PREFIX?: string;
+  readonly VITE_PLUGIN_API_URL?: string;
+  readonly VITE_PLUGIN_API_PORT?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
 declare module "*.vue" {
   import type { DefineComponent } from "vue";
   const component: DefineComponent<{}, {}, any>;

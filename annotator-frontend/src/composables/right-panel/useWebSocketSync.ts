@@ -13,13 +13,9 @@ import { useSingleFile } from "@/plugins/api/index";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import { useToast } from "@/composables/useToast";
 import * as Copper from "copper3d";
-// import * as Copper from "@/ts/index"
 import * as THREE from "three";
 import { IDetails } from "@/models";
-
-const base_url = import.meta.env.VITE_PLUGIN_API_URL;
-const port = import.meta.env.VITE_PLUGIN_API_PORT;
-const { hostname } = new URL(base_url);
+import { getWsBaseUrl } from "@/plugins/api/getBaseUrl";
 
 /**
  * Interface for WebSocket dependencies
@@ -66,7 +62,7 @@ export function useWebSocketSync(deps: IWebSocketDeps) {
         if (socket) {
             socket.close();
         }
-        socket = new WebSocket(`ws://${hostname}:${port}/ws/${caseId}`);
+        socket = new WebSocket(`${getWsBaseUrl()}/${caseId}`);
         socket.onopen = function (e) {
             console.log(`WebSocket connected for case: ${caseId}`);
         };

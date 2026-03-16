@@ -1,22 +1,11 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import { IRequests } from "@/models";
-
-/**
- * TODO: 
- * The production mode connects to nectar server.
- * If you want to connect to the local server, please change Base_URL http://127.0.0.1:8000/api.
- */
-// const Base_URL = "http://127.0.0.1:8082/api"
-// const Base_URL = "http://130.216.217.115:8082/api";
-const base_url = import.meta.env.VITE_PLUGIN_API_URL;
-const port = import.meta.env.VITE_PLUGIN_API_PORT;
-
+import { getApiBaseUrl } from "./getBaseUrl";
 
 const maxRetries = 3;
 const retryDelay = 1000;
 
-const endpoint = `${base_url}:${port}/api`;
-axios.defaults.baseURL = endpoint;
+axios.defaults.baseURL = getApiBaseUrl();
 
 axios.interceptors.request.use((config: AxiosRequestConfig | any) => config);
 axios.interceptors.response.use(
