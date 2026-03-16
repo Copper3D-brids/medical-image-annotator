@@ -17,6 +17,7 @@
     </default-bar>
 
     <default-view />
+    <ToastNotification />
   </v-app>
 </template>
 
@@ -35,6 +36,7 @@
 import DefaultBar from "../components/AppBar.vue";
 import DefaultView from "./View.vue";
 import NavPanel from "@/components/navigation/NavPanel.vue";
+import ToastNotification from "@/components/common/ToastNotification.vue";
 import { useTheme } from "vuetify";
 import { ref } from "vue";
 import emitter from "@/plugins/custom-emitter";;
