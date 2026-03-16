@@ -12,7 +12,6 @@
  * @module composables/left-panel/useMaskOperations
  */
 import { ref, type Ref } from "vue";
-// import * as Copper from "@/ts/index";
 import * as Copper from "copper3d";
 import {
     IStoredMasks,
@@ -23,7 +22,6 @@ import {
     ICaseUrls,
 } from "@/models";
 import { useReplaceMask, useClearMaskMesh, useInitMasks, useSaveMasks, useInitMaskLayers } from "@/plugins/api/index";
-import { convertInitMaskData } from "@/plugins/worker";
 import { switchAnimationStatus } from "@/components/viewer/utils";
 import emitter from "@/plugins/custom-emitter";
 import { useNiftiVoxelData } from "@/plugins/utils";

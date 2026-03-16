@@ -6,7 +6,6 @@ import {
     IMaskInitLayersRequest,
     IAllMasksResponse,
 } from "@/models";
-import { decode } from "@msgpack/msgpack";
 
 /**
  * init the mask data in backend (legacy JSON format)
@@ -109,7 +108,7 @@ export async function useApplyMaskDelta(
  */
 export async function useInitMaskLayers(
     request: IMaskInitLayersRequest
-): Promise<{ success: boolean; dimensions: number[]; layer_initialized: string; file_size:number } | null> {
+): Promise<{ success: boolean; dimensions: number[]; layer_initialized: string; file_size: number } | null> {
     try {
         const result = await http.post<{
             success: boolean;

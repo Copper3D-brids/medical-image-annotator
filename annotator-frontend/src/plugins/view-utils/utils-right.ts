@@ -224,29 +224,29 @@ export function processPointsCloud(points: number[][], bias: THREE.Vector3) {
 
 }
 
-export const findBreastRequestUrls = (
-  details: Array<IDetails>,
-  caseId: string,
-  type: "registration" | "origin"
-) => {
-  const currentCaseDetails = details.filter((item) => item.name === caseId)[0];
-  const requests: Array<IRequests> = [];
+// export const findBreastRequestUrls = (
+//   details: Array<IDetails>,
+//   caseId: string,
+//   type: "registration" | "origin"
+// ) => {
+//   const currentCaseDetails = details.filter((item) => item.name === caseId)[0];
+//   const requests: Array<IRequests> = [];
 
-  currentCaseDetails.file_paths.segmentation_breast_points_paths.forEach(
-    (filepath) => {
-      requests.push({
-        url: "/single-file",
-        params: { path: filepath },
-      });
-    }
-  );
-  currentCaseDetails.file_paths.segmentation_breast_model_paths.forEach(
-    (filepath) => {
-      requests.push({
-        url: "/single-file",
-        params: { path: filepath },
-      });
-    }
-  );
-  return requests;
-};
+//   currentCaseDetails.file_paths.segmentation_breast_points_paths.forEach(
+//     (filepath) => {
+//       requests.push({
+//         url: "/single-file",
+//         params: { path: filepath },
+//       });
+//     }
+//   );
+//   currentCaseDetails.file_paths.segmentation_breast_model_paths.forEach(
+//     (filepath) => {
+//       requests.push({
+//         url: "/single-file",
+//         params: { path: filepath },
+//       });
+//     }
+//   );
+//   return requests;
+// };
