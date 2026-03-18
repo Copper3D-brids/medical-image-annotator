@@ -67,6 +67,7 @@ import {
 } from "@/plugins/view-utils/tools";
 import { switchAnimationStatus, addNameToLoadedMeshes } from "./utils";
 import { ILoadedMeshes, } from "@/models";
+import { useToast } from "@/composables/useToast";
 
 /** Reference to base container element */
 let baseContainer = ref<HTMLDivElement>();
@@ -95,6 +96,8 @@ let loadBarMain = ref<Copper.loadingBarType>();
 let loadingContainer = ref<HTMLDivElement>();
 /** Progress text element */
 let progress = ref<HTMLDivElement>();   
+
+const toast = useToast();
 
 // offline working variables
 /** Pre-loaded eraser cursor URLs for offline use */
@@ -261,7 +264,6 @@ const loadAllNrrds = (
   }) => void,
   reject?: (reason?: any) => void
 ) => {
-  switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
   allSlices = [];
   allLoadedMeshes = [];
   for (let i = 0; i < urls.length; i++) {
@@ -280,7 +282,7 @@ const imageLoader = (name:string, url:string, order: number, total:number, resol
     allSlices.push(newNrrdSlice);
     allLoadedMeshes.push(newNrrdMesh);
     filesCount.value += 1;
-    
+
     if (filesCount.value >= total) {
       allLoadedMeshes.sort((a: any, b: any) => {
         return a.order - b.order;
@@ -288,10 +290,17 @@ const imageLoader = (name:string, url:string, order: number, total:number, resol
       allSlices.sort((a: any, b: any) => {
         return a.order - b.order;
       });
+      toast.success("NRRD images loaded successfully");
       !!resolve && resolve({ meshes: allLoadedMeshes, slices: allSlices });
     }
   }
-  scene?.loadNrrd(url, loadBarMain.value!, true, onload);
+  try {
+    scene?.loadNrrd(url, loadBarMain.value!, true, onload);
+  } catch (e) {
+    console.error("Failed to load NRRD:", url, e);
+    toast.error(`Failed to load NRRD image: ${(e as Error).message}`);
+    switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
+  }
 }
 
 // hooks
@@ -369,8 +378,12 @@ watch(filesCount, ()=>{
 
     if (loadMask.value) {
       setMaskData();
+      // maskOps.setMaskData handles its own animation lifecycle
+    } else {
+      // No masks to load, hide animation now
+      switchAnimationStatus(loadingContainer.value!, progress.value!, "none");
     }
-    
+
     emit("update:afterLoadAllCaseImages", {
       allSlices,
       allLoadedMeshes,

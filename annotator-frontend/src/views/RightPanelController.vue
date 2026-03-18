@@ -215,7 +215,13 @@ const emitterOnCaseDetails = async (caseDetails: ICaseDetails) => {
   // Clear previous state
   models.removeOldMeshes();
   distanceCalc.cleanup();
-  
+
+  // Revoke old blob URL and clear mask reference
+  if (maskMeshUrl.value) {
+    URL.revokeObjectURL(maskMeshUrl.value);
+    maskMeshUrl.value = undefined;
+  }
+
   // Init WebSocket
   webSocket.initSocket(caseDetails.currentCaseId);
   

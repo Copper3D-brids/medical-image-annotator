@@ -33,7 +33,6 @@
  * @emits update:resetNrrdImageView - On view reset
  *
  * @exposes loadNrrd - Function to load NRRD files
- * @exposes removeOldMeshes - Function to clean up old meshes
  * @exposes onNavBarSingleClick - Handler for nav bar single click
  * @exposes onNavBarDoubleClick - Handler for nav bar double click
  * @exposes backTo3DView - Function to return to 3D view
@@ -358,28 +357,13 @@ const resetNrrdImageView = (loadNrrdMeshes: Copper.nrrdMeshesType) => {
   emit("update:resetNrrdImageView", { loadNrrdMeshes });
 };
 
-function removeOldMeshes(meshSet: THREE.Object3D[]) {
-  if (!!copperScene) {
-    (copperScene as Copper.copperScene).scene.remove(...meshSet);
-    meshSet.forEach((element) => {
-      element.traverse((case_mesh) => {
-        if ((case_mesh as THREE.Mesh).isMesh) {
-          (case_mesh as THREE.Mesh).geometry.dispose();
-        }
-      });
-    });
-    meshSet.length = 0;
-  }
-} 
-
 defineExpose({
   baseContainer,
   guiContainer,
-  loadingContainer, 
+  loadingContainer,
   progress,
   copperLoadingAnimationForNrrdLoader,
   loadNrrd,
-  removeOldMeshes,
   onNavBarSingleClick,
   onNavBarDoubleClick,
   backTo3DView,

@@ -276,7 +276,15 @@ export function useRightPanelModels(deps: IModelsDeps): IUseRightPanelModelsRetu
         // Increment generation so stale async callbacks (GLB/OBJ still loading) self-cancel
         loadGeneration++;
         allRightPanelMeshes.value.forEach((mesh) => {
+            // Use removeFromParent() to handle meshes added by copper3d to internal groups
+            mesh.removeFromParent();
             copperScene.value!.scene.remove(mesh);
+            // Dispose geometry to free GPU memory
+            mesh.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh) {
+                    (child as THREE.Mesh).geometry.dispose();
+                }
+            });
         });
         allRightPanelMeshes.value = [];
         segmentMask3DModel.value = undefined;

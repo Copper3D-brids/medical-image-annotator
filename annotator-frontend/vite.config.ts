@@ -102,6 +102,7 @@ export default defineConfig(({ command, mode }) => {
     base: isPluginBuild ? "" : "/",
     build: isPluginBuild
       ? {
+        target: ['es2020', 'safari14'],
         lib: {
           entry: './src/index.ts',
           name: 'SegmentationApp',
