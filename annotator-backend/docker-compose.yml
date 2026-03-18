@@ -20,7 +20,6 @@ volumes:
   digitaltwins_portal_datasets:
     external: true
   annotator_outputs:
-    name: digitaltwins_annotator_outputs
     driver: local
 networks:
   digitaltwins:
