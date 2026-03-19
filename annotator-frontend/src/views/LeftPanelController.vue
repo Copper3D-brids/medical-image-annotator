@@ -75,7 +75,7 @@ import Upload from "@/components/common/Upload.vue";
 
 import { GUI } from "dat.gui";
 import "copper3d/dist/css/style.css";
-import * as Copper from "@/ts/index";
+import * as Copper from "copper3d";
 
 import { onBeforeMount, onMounted, ref, onUnmounted } from "vue";
 import {
