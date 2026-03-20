@@ -7,14 +7,14 @@
     @update:reset-nrrd-image-view="handleResetNrrdImageView"
   >
     <template #tumour-distance-panel>
-      <TumourDistancePanelRight 
+      <!-- <TumourDistancePanelRight 
         :tumour-volume="distanceCalc.tumourVolume.value"
         :tumour-extent="distanceCalc.tumourExtent.value"
         :skin-dist="distanceCalc.skinDist.value"
         :rib-dist="distanceCalc.ribDist.value"
         :nipple-dist="distanceCalc.nippleDist.value"
         :nipple-clock="distanceCalc.nippleClock.value"
-      />
+      /> -->
     </template>
     <template #bottom-nav-bar>
       <NavBarRight

@@ -230,6 +230,10 @@ const emitterOnNrrdTools = (tools: Copper.NrrdTools) => {
 const emitterOnFinishLoadAllCaseImages = () => {
   enableControls();
   syncFromManager();
+
+  // Set layer2 channel1 to gray
+  nrrdTools.value?.setChannelColor('layer2', 1 as Copper.ChannelValue, { r: 128, g: 128, b: 128, a: 255 });
+  refreshChannelColors();
 };
 
 const emitterOnCaseSwitched = () => {

@@ -77,6 +77,12 @@
         ></v-select>
       </div>
     </div>
+
+    <div class="px-10 mb-4">
+      <p class="text-medium-emphasis text-body-2">
+        <strong>Shortcut:</strong> Ctrl+1 = Scroll:Zoom, Ctrl+2 = Scroll:Slice
+      </p>
+    </div>
     </Dialog>
   </div>
 </template>
