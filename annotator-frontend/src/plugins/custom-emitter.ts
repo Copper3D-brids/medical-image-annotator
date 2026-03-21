@@ -39,6 +39,9 @@ const eventNames = [
     "LayerChannel:ActiveChanged",
     "LayerChannel:ActiveLayerChanged",
     "Segmentation:SwitchAnimationStatus",
+    "SDS:ExportRequested",
+    "SDS:GenerationComplete",
+    "SDS:GenerationError",
 ];
 type EventNames = (typeof eventNames)[number];
 

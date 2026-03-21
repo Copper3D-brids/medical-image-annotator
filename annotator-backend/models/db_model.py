@@ -30,6 +30,8 @@ class Assay(Base):
     minio_public_path = Column(String, nullable=False)
     datasets_config = Column(JSON, nullable=False)  # Stores list of dataset names
     cohorts_config = Column(JSON, nullable=False)   # Stores list of cohort/case names
+    output_path = Column(String, nullable=False)
+    output_sds_path = Column(String, nullable=False)
 
     user = relationship("User", back_populates="assays")
     cases = relationship("Case", back_populates="assay")
