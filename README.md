@@ -1,4 +1,4 @@
-# 2025-team-D-sparc-plugins-medical-image-annotation
+# Medical Image Annotator
 
 ## Table of contents
 * [Summary of functionality](#summary-of-functionality)
