@@ -13,15 +13,18 @@ from sqlalchemy.orm import Session
 from models.db_model import User, Assay, Case, CaseInput, CaseOutput
 from services.minio_service import MinIOService
 from database.database import get_db
+from utils.sds import SDSDataset
+import asyncio
 
 router = APIRouter()
 
 layers = ["layer1", "layer2", "layer3", "layer4"]
 
+
 @router.websocket('/ws/{case_id}')
 async def websocket_endpoint(websocket: WebSocket, case_id: str):
     """WebSocket endpoint for receiving OBJ conversion completion notifications.
-    
+
     Args:
         websocket: The WebSocket connection
         case_id: The case ID to associate with this connection
@@ -35,6 +38,87 @@ async def websocket_endpoint(websocket: WebSocket, case_id: str):
         print(f"WebSocket closed for case {case_id}: {e}")
     finally:
         manager.disconnect(case_id)
+
+
+@router.websocket('/ws/sds/{assay_uuid}')
+async def websocket_sds(websocket: WebSocket, assay_uuid: str):
+    """WebSocket endpoint for SDS generation progress notifications."""
+    ws_key = f"sds_{assay_uuid}"
+    await manager.connect(ws_key, websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except Exception as e:
+        print(f"SDS WebSocket closed for assay {assay_uuid}: {e}")
+    finally:
+        manager.disconnect(ws_key)
+
+
+@router.post("/api/generate_sds")
+async def generate_sds(auth: UserAuth, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    assay = db.query(Assay).filter(Assay.uuid == auth.assay_uuid).first()  # type: ignore
+    if not assay:
+        raise HTTPException(status_code=404, detail="Assay not found")
+
+    assay_uuid = auth.assay_uuid
+
+    def _run_sds_generation():
+        """Run SDS generation in background, zip result, notify via WS."""
+        from database.database import SessionLocal
+        bg_db = SessionLocal()
+        ws_key = f"sds_{assay_uuid}"
+        try:
+            bg_assay = bg_db.query(Assay).filter(Assay.uuid == assay_uuid).first()
+            if bg_assay:
+                sds = SDSDataset(bg_assay, bg_db)
+                sds.create_output_sds()
+                zip_path = sds.zip_dataset()
+                # Notify frontend via WS
+                asyncio.run(manager.send_notification(ws_key, {
+                    "status": "complete",
+                    "action": "sds_ready",
+                    "assay_uuid": assay_uuid,
+                    "zip_path": str(zip_path),
+                }))
+        except Exception as e:
+            print(f"SDS generation failed: {e}")
+            try:
+                asyncio.run(manager.send_notification(ws_key, {
+                    "status": "error",
+                    "action": "sds_error",
+                    "assay_uuid": assay_uuid,
+                    "error": str(e),
+                }))
+            except Exception:
+                pass
+        finally:
+            bg_db.close()
+
+    background_tasks.add_task(_run_sds_generation)
+    return {
+        "status": "processing",
+        "assay_uuid": auth.assay_uuid,
+        "message": "SDS generation started in background"
+    }
+
+
+@router.get("/api/download_sds")
+async def download_sds(assay_uuid: str = Query(...), db: Session = Depends(get_db)):
+    """Download the zipped SDS dataset for an assay."""
+    assay = db.query(Assay).filter(Assay.uuid == assay_uuid).first()  # type: ignore
+    if not assay:
+        raise HTTPException(status_code=404, detail="Assay not found")
+
+    zip_path = Path(assay.output_sds_path).parent / f"{Path(assay.output_sds_path).name}.zip"
+    if not zip_path.exists():
+        raise HTTPException(status_code=404, detail="SDS zip not found. Generate SDS first.")
+
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=zip_path.name,
+        headers={"Content-Disposition": f"attachment; filename={zip_path.name}"}
+    )
 
 
 @router.post('/api/cases')
@@ -274,10 +358,10 @@ async def clear_mesh(case_id: str = Query(None), db: Session = Depends(get_db)):
 
 @router.get("/api/mask/save")
 async def save_mask(
-    case_id: str,
-    layer_id: str = Query("layer1", description="Layer to convert to OBJ (layer1/layer2/layer3)"),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+        case_id: str,
+        layer_id: str = Query("layer1", description="Layer to convert to OBJ (layer1/layer2/layer3)"),
+        background_tasks: BackgroundTasks = None,
+        db: Session = Depends(get_db)
 ):
     """
     Convert a NIfTI mask layer to OBJ 3D mesh format.
@@ -325,10 +409,10 @@ async def save_mask(
 
 @router.get("/api/mask/save-gltf")
 async def save_mask_gltf(
-    case_id: str,
-    layer_id: str = Query("layer1", description="Layer to convert to GLTF (layer1/layer2/layer3)"),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+        case_id: str,
+        layer_id: str = Query("layer1", description="Layer to convert to GLTF (layer1/layer2/layer3)"),
+        background_tasks: BackgroundTasks = None,
+        db: Session = Depends(get_db)
 ):
     """
     Convert a NIfTI mask layer to GLTF 3D mesh format with channel-specific colors.
@@ -423,23 +507,23 @@ async def get_all_masks(case_id: int, db: Session = Depends(get_db)):
     """
     import msgpack
     from fastapi.responses import Response
-    
+
     case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
     if not case_output:
         raise HTTPException(status_code=404, detail="CaseOutput not found")
-    
+
     masks = {
         "shape": None,  # Will be populated from NIfTI header if data exists
     }
-    
+
     # Load each layer's NIfTI file if it exists and has data
     for layer_idx in range(1, 4):
         layer_path_attr = f"mask_layer{layer_idx}_nii_path"
         layer_size_attr = f"mask_layer{layer_idx}_nii_size"
-        
+
         layer_path = getattr(case_output, layer_path_attr)
         layer_size = getattr(case_output, layer_size_attr)
-        
+
         if layer_path and layer_size and layer_size > 0:
             file_path = Path(layer_path)
             if file_path.exists() and file_path.stat().st_size > 0:
@@ -450,7 +534,7 @@ async def get_all_masks(case_id: int, db: Session = Depends(get_db)):
                 masks[f"layer{layer_idx}"] = None
         else:
             masks[f"layer{layer_idx}"] = None
-    
+
     return Response(content=msgpack.packb(masks), media_type="application/msgpack")
 
 
@@ -463,30 +547,30 @@ async def get_mask_raw(case_id: int, layer_id: str, db: Session = Depends(get_db
     Useful for AI model inference results that skip NIfTI encoding.
     """
     from fastapi.responses import Response
-    
+
     case_output = db.query(CaseOutput).filter(CaseOutput.case_id == case_id).first()  # type: ignore
     if not case_output:
         raise HTTPException(status_code=404, detail="CaseOutput not found")
-    
+
     # Validate layer_id
     if layer_id not in ["layer1", "layer2", "layer3"]:
         raise HTTPException(status_code=400, detail="Invalid layer_id. Must be layer1, layer2, or layer3")
-    
+
     layer_path = getattr(case_output, f"mask_{layer_id}_nii_path")
     layer_size = getattr(case_output, f"mask_{layer_id}_nii_size")
-    
+
     if not layer_path or not layer_size or layer_size == 0:
         raise HTTPException(status_code=404, detail=f"Layer {layer_id} has no data")
-    
+
     file_path = Path(layer_path)
     if not file_path.exists() or file_path.stat().st_size == 0:
         raise HTTPException(status_code=404, detail=f"Layer {layer_id} file not found or empty")
-    
+
     # Read the NIfTI file and extract raw data
     # For now, return the raw file bytes - frontend will parse NIfTI
     with open(file_path, "rb") as f:
         raw_data = f.read()
-    
+
     return Response(
         content=raw_data,
         media_type="application/octet-stream",
@@ -505,21 +589,21 @@ async def apply_mask_delta(delta: model.MaskDeltaRequest, db: Session = Depends(
     """
     import nibabel as nib
     import numpy as np
-    
+
     case_output = db.query(CaseOutput).filter(CaseOutput.case_id == delta.caseId).first()  # type: ignore
     if not case_output:
         raise HTTPException(status_code=404, detail="CaseOutput not found")
-    
+
     # Validate layer
     if delta.layer not in ["layer1", "layer2", "layer3"]:
         raise HTTPException(status_code=400, detail="Invalid layer. Must be layer1, layer2, or layer3")
-    
+
     layer_path = getattr(case_output, f"mask_{delta.layer}_nii_path")
     if not layer_path:
         raise HTTPException(status_code=404, detail=f"Layer {delta.layer} path not configured")
-    
+
     file_path = Path(layer_path)
-    
+
     try:
         # Load existing NIfTI or create new if empty
         if file_path.exists() and file_path.stat().st_size > 0:
@@ -529,28 +613,28 @@ async def apply_mask_delta(delta: model.MaskDeltaRequest, db: Session = Depends(
         else:
             # Cannot apply delta to non-existent data
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Layer {delta.layer} has no initialized data. Use /api/mask/init first."
             )
-        
+
         # Apply delta changes
         for change in delta.changes:
             if 0 <= change.x < data.shape[0] and \
-               0 <= change.y < data.shape[1] and \
-               0 <= change.z < data.shape[2]:
+                    0 <= change.y < data.shape[1] and \
+                    0 <= change.z < data.shape[2]:
                 data[change.x, change.y, change.z] = change.value
-        
+
         # Save updated NIfTI
         new_img = nib.Nifti1Image(data, affine)
         nib.save(new_img, str(file_path))
-        
+
         # Update size in database
         setattr(case_output, f"mask_{delta.layer}_nii_size", file_path.stat().st_size)
         db.commit()
         db.refresh(case_output)
-        
+
         return {"success": True, "changesApplied": len(delta.changes)}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to apply delta: {str(e)}")
 
@@ -565,52 +649,52 @@ async def init_mask_layers(request: model.MaskInitRequest, db: Session = Depends
     """
     import nibabel as nib
     import numpy as np
-    
+
     case_output = db.query(CaseOutput).filter(CaseOutput.case_id == request.caseId).first()  # type: ignore
     if not case_output:
         raise HTTPException(status_code=404, detail="CaseOutput not found")
-    
+
     if len(request.dimensions) != 3:
         raise HTTPException(status_code=400, detail="Dimensions must be [width, height, depth]")
-    
+
     width, height, depth = request.dimensions
-    
+
     # Create affine matrix from spacing and origin
     if request.voxelSpacing and len(request.voxelSpacing) >= 3:
         spacing = request.voxelSpacing[:3]
     else:
         spacing = [1.0, 1.0, 1.0]  # Default 1mm spacing
-    
+
     if request.spaceOrigin and len(request.spaceOrigin) >= 3:
         origin = request.spaceOrigin[:3]
     else:
         origin = [0.0, 0.0, 0.0]
-    
+
     # RAI→LPS conversion: NRRD uses RAI [-172.9, -150.6, -60.3],
     # NIfTI uses LPS [172.9, 150.6, -60.3]. Negate X and Y.
     affine = np.diag([-spacing[0], -spacing[1], spacing[2], 1.0])
     affine[:3, 3] = [-origin[0], -origin[1], origin[2]]
-    
+
     # Create empty volume
     empty_data = np.zeros((width, height, depth), dtype=np.uint8)
-    
+
     # Initialize each layer
     for layer_idx in range(1, 4):
         layer_path = getattr(case_output, f"mask_layer{layer_idx}_nii_path")
         if layer_path:
             file_path = Path(layer_path)
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Create NIfTI image
             img = nib.Nifti1Image(empty_data.copy(), affine)
             nib.save(img, str(file_path))
-            
+
             # Update size in database
             setattr(case_output, f"mask_layer{layer_idx}_nii_size", file_path.stat().st_size)
-    
+
     db.commit()
     db.refresh(case_output)
-    
+
     return {
         "success": True,
         "dimensions": request.dimensions,

@@ -1,9 +1,10 @@
 # terminial-> venv/Scripts/activate.bat
 
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
+import traceback
 from pathlib import Path
 import io
 import os
@@ -46,6 +47,19 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.extract_tb(exc.__traceback__)
+    last_frame = tb[-1] if tb else None
+    location = f"{last_frame.filename}:{last_frame.lineno}" if last_frame else "unknown"
+    error_msg = f"{type(exc).__name__} at {location} - {str(exc)}"
+    print(f"[Unhandled Exception] {request.method} {request.url.path}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": error_msg}
+    )
+
+
 @app.get('/')
 async def root():
     return "Welcome to segmentation backend"
@@ -60,7 +74,6 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
 
     # 1.1 Validate Minio public path
     minio_public_path = request.system.minio.public_path
-    print(minio_public_path)
     minio_service.validate_public_path(minio_public_path)
 
     datasets = request.assay_info.datasets
@@ -93,6 +106,16 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
 
     # Transactional DB updates
     try:
+
+        # pre: make sure the output folder exist
+        # Create output directory: outputs/{user_uuid}/{assay_uuid}/medical-image-annotator-outputs
+        output_dir = Path(
+            "outputs") / request.user_info.uuid / request.assay_info.uuid / "medical-image-annotator-outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        output_sds_dir = output_dir.parent / "medical-image-annotator-outputs-sds"
+        output_sds_dir.mkdir(parents=True, exist_ok=True)
+
         # 1. User
         user = db.query(User).filter(User.uuid == request.user_info.uuid).first()  # type: ignore
         if not user:
@@ -114,7 +137,9 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                 name=request.assay_info.name,
                 minio_public_path=minio_public_path,
                 datasets_config=datasets,
-                cohorts_config=cohorts
+                cohorts_config=cohorts,
+                output_path=str(output_dir),
+                output_sds_path=str(output_sds_dir)
             )
             db.add(assay)
             db.commit()
@@ -177,15 +202,11 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
 
             # 5. Output (ensure it exists)
             if not case.output:
-                # Create output directory: outputs/{user_uuid}/{assay_uuid}/medical-image-annotator-outputs
-                output_dir = Path(
-                    "outputs") / request.user_info.uuid / request.assay_info.uuid / "medical-image-annotator-outputs"
-                output_dir.mkdir(parents=True, exist_ok=True)
 
                 # Create case-specific folder
                 case_folder = output_dir / cohort
                 case_folder.mkdir(parents=True, exist_ok=True)
-
+                
                 file_info = {}
 
                 for idx, output_type in enumerate(Config.OUTPUTS):
@@ -249,7 +270,14 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        import traceback
+        error_tb = traceback.format_exc()
+        print(f"[get_tool_config] Error during DB transaction:\n{error_tb}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__} at {traceback.extract_tb(e.__traceback__)[-1].filename}:"
+                   f"{traceback.extract_tb(e.__traceback__)[-1].lineno} - {str(e)}"
+        )
 
 
 @app.get("/data/users")

@@ -72,6 +72,9 @@ import ButtonsControl from "@/components/navigation/ButtonsControl.vue";
 import { ref, onMounted, onUnmounted } from "vue";
 import emitter from "@/plugins/custom-emitter";
 import { useToast } from "@/composables/useToast";
+import { useAppConfig } from "@/plugins/hooks/config";
+import { useGenerateSDS, useDownloadSDS } from "@/plugins/api/cases";
+import { getWsBaseUrl } from "@/plugins/api/getBaseUrl";
 // import type { NrrdTools, ToolMode } from "@/ts/index";
 import type { NrrdTools, ToolMode } from "copper3d";
 
@@ -147,6 +150,12 @@ const commFuncBtnValues = ref([
     value: "gaussianSmooth",
     disabled: btnClearDisabled,
     color: "nav-success-2",
+  },
+  {
+    label: "Export SPARC SDS Dataset",
+    value: "exportSDS",
+    disabled: ref(false),
+    color: "pink-lighten-1",
   },
 ]);
 
@@ -311,6 +320,10 @@ function updateSliderSettings() {
 }
 
 function onBtnClick(val: string) {
+  if (val === "exportSDS") {
+    handleExportSDS();
+    return;
+  }
   if (val === "gaussianSmooth") {
     emitter.emit("Segmentation:SwitchAnimationStatus", { status: "flex", text: "Smoothing: Gaussian..." });
     // Use setTimeout to let the UI update before the synchronous smoothing blocks the main thread
@@ -330,6 +343,91 @@ function onBtnClick(val: string) {
   }
 }
 
+// --- SDS Export: decoupled, temporary for testing ---
+let sdsSocket: WebSocket | null = null;
+
+function connectSdsWebSocket(assayUuid: string) {
+  if (sdsSocket) {
+    sdsSocket.close();
+  }
+  const wsUrl = `${getWsBaseUrl()}/sds/${assayUuid}`;
+  sdsSocket = new WebSocket(wsUrl);
+
+  sdsSocket.onopen = () => {
+    console.log(`SDS WebSocket connected for assay ${assayUuid}`);
+  };
+
+  sdsSocket.onmessage = async (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.status === "complete" && data.action === "sds_ready") {
+        toast.success("SDS dataset generated successfully! Downloading...");
+        emitter.emit("SDS:GenerationComplete", data.assay_uuid);
+        await downloadSdsZip(data.assay_uuid);
+      } else if (data.status === "error") {
+        toast.error(`SDS generation failed: ${data.error}`);
+        emitter.emit("SDS:GenerationError", data.error);
+      }
+    } catch (e) {
+      console.error("Failed to parse SDS WebSocket message:", e);
+    }
+  };
+
+  sdsSocket.onclose = () => {
+    console.log("SDS WebSocket closed");
+    sdsSocket = null;
+  };
+}
+
+async function downloadSdsZip(assayUuid: string) {
+  try {
+    const blob = await useDownloadSDS(assayUuid);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "medical-image-annotator-outputs-sds.zip";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    toast.error("Failed to download SDS dataset");
+    console.error(e);
+  }
+}
+
+async function handleExportSDS() {
+  const { config } = useAppConfig();
+  if (!config || !config.user_info || !config.assay_info) {
+    toast.error("Configuration not available. Cannot export SDS.");
+    return;
+  }
+
+  const auth = {
+    user_uuid: config.user_info.uuid,
+    assay_uuid: config.assay_info.uuid,
+  };
+
+  // Connect WS first, then trigger generation
+  connectSdsWebSocket(auth.assay_uuid);
+
+  try {
+    await useGenerateSDS(auth);
+    toast.info("Converting outputs to SPARC SDS dataset in background...");
+  } catch (e) {
+    toast.error("Failed to start SDS generation");
+    console.error(e);
+  }
+}
+
+function closeSdsSocket() {
+  if (sdsSocket) {
+    sdsSocket.close();
+    sdsSocket = null;
+  }
+}
+// --- End SDS Export ---
+
 onUnmounted(() => {
   emitter.off("Segementation:CaseSwitched", emitterOnCaseSwitched);
   emitter.off("Segmentation:FinishLoadAllCaseImages", emitterOnFinishLoadAllCaseImages);
@@ -337,6 +435,7 @@ onUnmounted(() => {
   emitter.off("Common:DragImageWindowHigh", emitterOnDragImageWindowHigh);
   emitter.off("Core:NrrdTools", emitterOnNrrdTools);
   emitter.off("LayerChannel:ActiveLayerChanged", emitterOnActiveLayerChanged);
+  closeSdsSocket();
 });
 
 </script>

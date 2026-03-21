@@ -1,4 +1,6 @@
 import http from "./client";
+import axios from "axios";
+import { getApiBaseUrl } from "./getBaseUrl";
 import {
     INrrdCaseNames,
     IAuth,
@@ -46,4 +48,23 @@ export async function useNrrdCaseFiles(requests: Array<IRequests>) {
                 reject(error);
             });
     });
+}
+
+/**
+ * Trigger SDS dataset generation in background.
+ */
+export async function useGenerateSDS(auth: IAuth) {
+    return http.post<{ status: string; assay_uuid: string; message: string }>("/generate_sds", auth);
+}
+
+/**
+ * Download the zipped SDS dataset.
+ * Returns a Blob that the caller can trigger as a file download.
+ */
+export async function useDownloadSDS(assayUuid: string): Promise<Blob> {
+    const response = await axios.get(`${getApiBaseUrl()}/download_sds`, {
+        params: { assay_uuid: assayUuid },
+        responseType: "blob",
+    });
+    return response.data;
 }
