@@ -176,17 +176,17 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
             registration_4_url = resolved_results[cohort].get("registration-4")
 
             if not case.input:
-                case_input = CaseInput(case_id=case.id, 
-                                        contrast_pre_path=contrast_pre_url, 
-                                        contrast_1_path=contrast_1_url, 
-                                        contrast_2_path=contrast_2_url, 
-                                        contrast_3_path=contrast_3_url, 
-                                        contrast_4_path=contrast_4_url, 
-                                        registration_pre_path=registration_pre_url, 
-                                        registration_1_path=registration_1_url, 
-                                        registration_2_path=registration_2_url, 
-                                        registration_3_path=registration_3_url, 
-                                        registration_4_path=registration_4_url)
+                case_input = CaseInput(case_id=case.id,
+                                       contrast_pre_path=contrast_pre_url,
+                                       contrast_1_path=contrast_1_url,
+                                       contrast_2_path=contrast_2_url,
+                                       contrast_3_path=contrast_3_url,
+                                       contrast_4_path=contrast_4_url,
+                                       registration_pre_path=registration_pre_url,
+                                       registration_1_path=registration_1_url,
+                                       registration_2_path=registration_2_url,
+                                       registration_3_path=registration_3_url,
+                                       registration_4_path=registration_4_url)
                 db.add(case_input)
             else:
                 case.input.contrast_pre_path = contrast_pre_url
@@ -206,7 +206,7 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                 # Create case-specific folder
                 case_folder = output_dir / cohort
                 case_folder.mkdir(parents=True, exist_ok=True)
-                
+
                 file_info = {}
 
                 for idx, output_type in enumerate(Config.OUTPUTS):
@@ -263,7 +263,6 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
                 )
 
                 db.add(case_output)
-
 
         db.commit()
         return {"status": "success", "assay_id": assay.id}
