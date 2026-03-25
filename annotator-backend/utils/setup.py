@@ -94,7 +94,6 @@ class Config:
     MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
     MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
     MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() in ("true", "1")
-    MINIO_PRESIGNED_EXPIRES = int(os.environ.get("MINIO_PRESIGNED_EXPIRES", "900"))
 
 
 class TumourData:

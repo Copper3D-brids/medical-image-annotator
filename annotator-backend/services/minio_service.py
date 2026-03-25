@@ -1,10 +1,9 @@
 import pandas as pd
 import io
-from datetime import timedelta
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse
 from typing import List, Dict
 from minio import Minio
-from utils.setup import Config, get_external_base_url
+from utils.setup import Config
 
 
 class MinIOService:
@@ -53,41 +52,6 @@ class MinIOService:
             return pd.read_excel(io.BytesIO(data))
         except Exception as e:
             raise ValueError(f"Failed to fetch or parse {url}: {e}")
-
-    def get_presigned_url(self, full_url: str, expires_seconds: int = None) -> str:
-        """
-        Generate a presigned GET URL for a MinIO object.
-        full_url: the stored full MinIO URL — bucket is parsed from it automatically.
-
-        In Docker the internal client generates the presigned URL (minio:9000),
-        then the host portion is rewritten to the external address (e.g.
-        localhost:8004) so the browser can reach it.  MinIO validates presigned
-        signatures using the Host header from the incoming request, NOT the host
-        baked into the URL at signing time, so the rewrite is safe.
-        """
-        bucket, object_path = self._extract_bucket_and_path(full_url)
-        expires = expires_seconds or Config.MINIO_PRESIGNED_EXPIRES
-        presigned = self.client.presigned_get_object(
-            bucket,
-            object_path,
-            expires=timedelta(seconds=expires),
-        )
-
-        # Rewrite host for Docker: minio:9000 → localhost:8004
-        external_base = get_external_base_url()
-        if external_base:
-            parsed = urlparse(presigned)
-            ext_parsed = urlparse(external_base)
-            presigned = urlunparse((
-                ext_parsed.scheme,
-                ext_parsed.netloc,
-                parsed.path,
-                parsed.params,
-                parsed.query,
-                parsed.fragment,
-            ))
-
-        return presigned
 
     def validate_and_resolve_inputs(
         self,
