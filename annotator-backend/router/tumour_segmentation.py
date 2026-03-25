@@ -740,15 +740,12 @@ _FILE_TYPE_TO_ATTR = {
 
 
 @router.get("/api/files/{case_id}/{file_type}")
-async def get_file_presigned(case_id: int, file_type: str, db: Session = Depends(get_db)):
+async def get_file_proxy(case_id: int, file_type: str, db: Session = Depends(get_db)):
     """
-    Proxy endpoint for MinIO file access with presigned URLs.
-    Returns HTTP 307 redirect to a time-limited presigned URL so that the
-    browser/copper3d downloads the file directly from MinIO — no data passes
-    through the backend.
+    Stream a MinIO object through the backend so the browser never needs to
+    reach MinIO directly.  This avoids the presigned-URL host mismatch
+    problem in Docker (internal minio:9000 vs external localhost:8004).
     """
-    from fastapi.responses import RedirectResponse
-
     if file_type not in _FILE_TYPE_TO_ATTR:
         raise HTTPException(status_code=400, detail=f"Unknown file_type: {file_type}")
 
@@ -761,13 +758,31 @@ async def get_file_presigned(case_id: int, file_type: str, db: Session = Depends
         raise HTTPException(status_code=404, detail=f"No file for {file_type} in case {case_id}")
 
     try:
-        presigned_url = MinIOService().get_presigned_url(stored_url)
-        print(f"[presign] stored_url={stored_url}  →  presigned_url={presigned_url}")
-        return RedirectResponse(url=presigned_url, status_code=307)
+        minio_svc = MinIOService()
+        bucket, object_path = minio_svc._extract_bucket_and_path(stored_url)
+        response = minio_svc.client.get_object(bucket, object_path)
+        filename = object_path.rsplit("/", 1)[-1]
+
+        def iterfile():
+            try:
+                for chunk in response.stream(1024 * 64):  # 64 KB chunks
+                    yield chunk
+            finally:
+                response.close()
+                response.release_conn()
+
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f"inline; filename={filename}",
+                "x-file-name": filename,
+            },
+        )
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to generate presigned URL: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to stream file from MinIO: {e}")
 
 
 @router.websocket("/ws/mask/{case_id}")
