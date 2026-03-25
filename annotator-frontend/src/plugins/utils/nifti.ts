@@ -102,6 +102,84 @@ export async function useNiftiImageData(niiPath: string): Promise<ArrayBuffer | 
 }
 
 /**
+ * Convert a raw NIfTI image ArrayBuffer to a Uint8Array of voxel values,
+ * correctly interpreting the stored datatype.
+ */
+function niftiTypedArrayToUint8(imageData: ArrayBuffer, dtCode: number, pathForLog: string): Uint8Array {
+  const clamp = (v: number) => v < 0 ? 0 : v > 255 ? 255 : v;
+  switch (dtCode) {
+    case nifti.NIFTI1.TYPE_UINT8: {
+      return new Uint8Array(imageData);
+    }
+    case nifti.NIFTI1.TYPE_INT8: {
+      const src = new Int8Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = clamp(src[i]);
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_UINT16: {
+      const src = new Uint16Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = src[i] > 255 ? 255 : src[i];
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_INT16: {
+      const src = new Int16Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = clamp(src[i]);
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_UINT32: {
+      const src = new Uint32Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = src[i] > 255 ? 255 : src[i];
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_INT32: {
+      const src = new Int32Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = clamp(src[i]);
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_FLOAT32: {
+      const src = new Float32Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = clamp(Math.round(src[i]));
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_FLOAT64: {
+      const src = new Float64Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = clamp(Math.round(src[i]));
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_INT64: {
+      // BigInt64Array — extract low 32 bits and clamp
+      const src = new BigInt64Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) {
+        const v = Number(src[i]);
+        out[i] = clamp(v);
+      }
+      return out;
+    }
+    case nifti.NIFTI1.TYPE_UINT64: {
+      const src = new BigUint64Array(imageData);
+      const out = new Uint8Array(src.length);
+      for (let i = 0; i < src.length; i++) {
+        const v = Number(src[i]);
+        out[i] = v > 255 ? 255 : v;
+      }
+      return out;
+    }
+    default: {
+      console.warn(`useNiftiVoxelData: unhandled datatypeCode ${dtCode} for ${pathForLog}, falling back to raw bytes`);
+      return new Uint8Array(imageData);
+    }
+  }
+}
+
+/**
  * Read NIfTI file and return only the raw voxel data as Uint8Array.
  *
  * Handles fetching, decompression, header parsing, and voxel extraction
@@ -126,7 +204,11 @@ export async function useNiftiVoxelData(niiPath: string): Promise<Uint8Array | n
     return null;
   }
 
-  return new Uint8Array(imageData);
+  // Convert to Uint8Array based on the actual NIfTI datatype.
+  // Simply doing `new Uint8Array(imageData)` reinterprets raw bytes and
+  // produces wrong results for multi-byte types (e.g. int16 from AI models).
+  const dtCode = (header as nifti.NIFTI1Header | nifti.NIFTI2Header).datatypeCode;
+  return niftiTypedArrayToUint8(imageData, dtCode, niiPath);
 }
 
 /**
