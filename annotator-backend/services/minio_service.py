@@ -9,10 +9,12 @@ from utils.setup import Config
 
 class MinIOService:
     def __init__(self):
-        self._client = None  # Lazy init
+        self._client = None  # Lazy init — internal endpoint (for SDK data ops)
+        self._external_client = None  # Lazy init — external endpoint (for presigned URLs)
 
     @property
     def client(self) -> Minio:
+        """Internal MinIO client for data operations (get_object, put_object, etc.)."""
         if self._client is None:
             self._client = Minio(
                 endpoint=Config.MINIO_ENDPOINT,
@@ -21,6 +23,28 @@ class MinIOService:
                 secure=Config.MINIO_SECURE,
             )
         return self._client
+
+    @property
+    def presign_client(self) -> Minio:
+        """
+        MinIO client for generating presigned URLs.
+        In Docker, uses the external endpoint (EXTERNAL_HOST:EXTERNAL_PORT) so that
+        the generated URLs are accessible from the browser.
+        Falls back to the internal client when not in Docker.
+        """
+        if self._external_client is None:
+            ext_endpoint = Config.get_minio_external_endpoint()
+            if ext_endpoint:
+                self._external_client = Minio(
+                    endpoint=ext_endpoint,
+                    access_key=Config.MINIO_ACCESS_KEY,
+                    secret_key=Config.MINIO_SECRET_KEY,
+                    secure=Config.get_minio_external_secure(),
+                )
+            else:
+                # Not in Docker — reuse internal client
+                self._external_client = self.client
+        return self._external_client
 
     def validate_base_url(self, base_url: str):
         if not base_url.startswith("http"):
@@ -62,7 +86,7 @@ class MinIOService:
         """
         bucket, object_path = self._extract_bucket_and_path(full_url)
         expires = expires_seconds or Config.MINIO_PRESIGNED_EXPIRES
-        return self.client.presigned_get_object(
+        return self.presign_client.presigned_get_object(
             bucket,
             object_path,
             expires=timedelta(seconds=expires),
