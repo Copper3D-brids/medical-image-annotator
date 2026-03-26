@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from typing import List
 from sqlalchemy.orm import Session
 from models.api_models import ToolConfigRequest
+from services.minio_service import MinIOValidationError
 from models.db_model import User, Assay, Case, CaseInput, CaseOutput
 from services.minio_service import MinIOService
 from database.database import get_db, init_db
@@ -72,14 +73,27 @@ async def health():
 
 @app.post('/api/tool-config')
 async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_db)):
-    print(f"Received tool config for user: {request.user_info.uuid}")
+    print(f"\n{'='*60}")
+    print(f"[tool-config] user={request.user_info.uuid}, assay={request.assay_info.uuid}")
+    print(f"  datasets: {request.assay_info.datasets}")
+    print(f"  cohorts:  {request.assay_info.cohorts}")
+    print(f"  minio:    {request.system.minio.base_url}")
+    print(f"{'='*60}")
 
     # 1. Validation & Resolution
     minio_service = MinIOService()
 
     # 1.1 Validate Minio public path
     minio_base_url = request.system.minio.base_url
-    minio_service.validate_base_url(minio_base_url)
+    print(f"[Step 1.1] Validating MinIO base URL: {minio_base_url}")
+    try:
+        minio_service.validate_base_url(minio_base_url)
+    except MinIOValidationError as e:
+        print(f"[Step 1.1] FAILED: {e.summary}")
+        raise HTTPException(status_code=400, detail={
+            "step": e.step, "summary": e.summary, "detail": e.detail
+        })
+    print(f"[Step 1.1] OK")
 
     datasets = request.assay_info.datasets
     cohorts = request.assay_info.cohorts
@@ -94,10 +108,20 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
             cohorts=cohorts,
             required_inputs=required_inputs
         )
-    except ValueError as e:
+        print(f"[Step 1.4] Input resolution complete")
+    except MinIOValidationError as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"[Step {e.step}] FAILED: {e.summary}")
+        raise HTTPException(status_code=400, detail={
+            "step": e.step, "summary": e.summary, "detail": e.detail
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail={
+            "step": "unknown", "summary": f"Unexpected validation error: {e}", "detail": str(e)
+        })
 
     # Rewrite URLs for Docker environment (replace internal MinIO host with external address)
     external_base = get_external_base_url()
@@ -279,8 +303,11 @@ async def get_tool_config(request: ToolConfigRequest, db: Session = Depends(get_
         print(f"[get_tool_config] Error during DB transaction:\n{error_tb}")
         raise HTTPException(
             status_code=500,
-            detail=f"{type(e).__name__} at {traceback.extract_tb(e.__traceback__)[-1].filename}:"
-                   f"{traceback.extract_tb(e.__traceback__)[-1].lineno} - {str(e)}"
+            detail={
+                "step": "db",
+                "summary": f"Internal server error during database operation",
+                "detail": f"{type(e).__name__}: {str(e)}"
+            }
         )
 
 

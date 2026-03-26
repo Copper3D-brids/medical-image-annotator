@@ -25,8 +25,10 @@ import { useToolConfig, checkHealth } from "@/plugins/api/index";
 import toolConfig from "@/assets/tool_config.json";
 import { useAppConfig } from "@/plugins/hooks/config";
 import { useSegmentationCasesStore } from "@/store/app";
+import { useToast } from "@/composables/useToast";
 
 const { setPluginReady } = useSegmentationCasesStore();
+const toast = useToast();
 const layoutTwoPanelsRef = ref<InstanceType<typeof LayoutTwoPanels>>();
 // need to remove this after testing
 localStorage.setItem("app_config", JSON.stringify(toolConfig));
@@ -51,7 +53,20 @@ async function runToolConfig() {
       setPluginReady();
     }
   }).catch((err) => {
-    console.log(err);
+    const errData = err?.response?.data?.detail;
+    if (errData && typeof errData === "object" && errData.summary) {
+      // Structured error from backend
+      toast.error(errData.summary, 10000);
+      if (errData.detail) {
+        toast.warning(errData.detail, 12000);
+      }
+      console.error(`[tool-config] Step ${errData.step}: ${errData.summary}\n${errData.detail}`);
+    } else {
+      // Fallback for unstructured errors
+      const message = typeof errData === "string" ? errData : err?.message ?? "Unknown error";
+      toast.error(`Configuration failed: ${message}`, 8000);
+      console.error("[tool-config] error:", message);
+    }
   });
 }
 

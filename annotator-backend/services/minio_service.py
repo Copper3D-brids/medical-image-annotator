@@ -3,7 +3,17 @@ import io
 from urllib.parse import urljoin, urlparse
 from typing import List, Dict
 from minio import Minio
+from minio.error import S3Error
 from utils.setup import Config
+
+
+class MinIOValidationError(Exception):
+    """Structured error for MinIO validation failures."""
+    def __init__(self, step: str, summary: str, detail: str):
+        self.step = step
+        self.summary = summary
+        self.detail = detail
+        super().__init__(summary)
 
 
 class MinIOService:
@@ -23,7 +33,11 @@ class MinIOService:
 
     def validate_base_url(self, base_url: str):
         if not base_url.startswith("http"):
-            raise ValueError(f"Invalid MinIO base URL: {base_url}")
+            raise MinIOValidationError(
+                step="1.1",
+                summary=f"Invalid MinIO base URL: '{base_url}'",
+                detail=f"URL must start with 'http' or 'https'. Received: '{base_url}'"
+            )
 
     def _extract_bucket_and_path(self, full_url: str) -> tuple[str, str]:
         """
@@ -44,14 +58,39 @@ class MinIOService:
         """Fetch Excel file from MinIO via SDK (supports private bucket)."""
         try:
             bucket, object_path = self._extract_bucket_and_path(url)
-            print(f"Fetching from MinIO SDK: bucket={bucket}, path={object_path}")
+            print(f"  [MinIO] Fetching: bucket='{bucket}', path='{object_path}'")
             response = self.client.get_object(bucket, object_path)
             data = response.read()
             response.close()
             response.release_conn()
             return pd.read_excel(io.BytesIO(data))
+        except S3Error as e:
+            if e.code == "NoSuchBucket":
+                bucket, _ = self._extract_bucket_and_path(url)
+                raise MinIOValidationError(
+                    step="minio",
+                    summary=f"MinIO bucket '{bucket}' does not exist",
+                    detail=f"Create the '{bucket}' bucket in MinIO and upload your dataset files."
+                )
+            elif e.code == "NoSuchKey":
+                _, object_path = self._extract_bucket_and_path(url)
+                raise MinIOValidationError(
+                    step="minio",
+                    summary=f"File not found in MinIO: {object_path}",
+                    detail=f"The file '{object_path}' does not exist. Please upload the required metadata files to MinIO."
+                )
+            else:
+                raise MinIOValidationError(
+                    step="minio",
+                    summary=f"MinIO error: {e.code}",
+                    detail=f"URL: {url}, Error: {e}"
+                )
         except Exception as e:
-            raise ValueError(f"Failed to fetch or parse {url}: {e}")
+            raise MinIOValidationError(
+                step="minio",
+                summary=f"Cannot connect to MinIO or read file",
+                detail=f"URL: {url}, Error: {type(e).__name__}: {e}"
+            )
 
     def validate_and_resolve_inputs(
         self,
@@ -72,12 +111,14 @@ class MinIOService:
         ds_meta = {}
 
         # 1.2 Validate datasets exist (by fetching metadata)
+        print(f"[Step 1.2] Validating {len(datasets)} dataset(s): {datasets}")
         for ds in datasets:
             ds_url = urljoin(public_path, f"{ds}/")
             subjects_url = urljoin(ds_url, Config.SUBJECTS_METADATA_PATH)
             samples_url = urljoin(ds_url, Config.SAMPLES_METADATA_PATH)
             manifest_url = urljoin(ds_url, Config.METADATA_PATH)
 
+            print(f"  Dataset '{ds}': expecting metadata at {ds_url}")
             try:
                 ds_meta[ds] = {
                     "subjects": self.fetch_excel(subjects_url),
@@ -85,20 +126,44 @@ class MinIOService:
                     "manifest": self.fetch_excel(manifest_url),
                     "url": ds_url
                 }
-            except ValueError as e:
-                raise ValueError(f"Dataset validation failed for '{ds}': {e}")
+                print(f"  Dataset '{ds}': OK")
+            except MinIOValidationError:
+                raise  # Already structured, pass through
+            except Exception as e:
+                raise MinIOValidationError(
+                    step="1.2",
+                    summary=f"Dataset '{ds}' metadata files missing in MinIO",
+                    detail=(
+                        f"Cannot read metadata for dataset '{ds}'. "
+                        f"Expected files:\n"
+                        f"  - {subjects_url}\n"
+                        f"  - {samples_url}\n"
+                        f"  - {manifest_url}\n"
+                        f"Error: {e}"
+                    )
+                )
 
         # 1.3 Verify cohorts exist in ALL datasets' subjects.xlsx
+        print(f"[Step 1.3] Verifying {len(cohorts)} cohort(s) in subjects.xlsx: {cohorts}")
         for ds_name, meta in ds_meta.items():
             subjects_df = meta['subjects']
             subject_col = next((c for c in subjects_df.columns if c.lower() == 'subject id'), None)
             if not subject_col:
-                raise ValueError(f"Dataset '{ds_name}' subjects.xlsx is missing 'subject id' column.")
+                raise MinIOValidationError(
+                    step="1.3",
+                    summary=f"Dataset '{ds_name}': subjects.xlsx missing 'Subject ID' column",
+                    detail=f"Found columns: {list(subjects_df.columns)}. Please add a 'Subject ID' column."
+                )
 
             existing_subjects = set(subjects_df[subject_col].astype(str).values)
+            print(f"  Dataset '{ds_name}': found {len(existing_subjects)} subject(s) in subjects.xlsx")
             for cohort in cohorts:
                 if cohort not in existing_subjects:
-                    raise ValueError(f"Cohort '{cohort}' not found in dataset '{ds_name}'.")
+                    raise MinIOValidationError(
+                        step="1.3",
+                        summary=f"Cohort '{cohort}' not found in dataset '{ds_name}'",
+                        detail=f"Available subjects: {sorted(existing_subjects)}"
+                    )
 
         # 1.4 & Resolve Inputs
         resolved_paths = {cohort: {} for cohort in cohorts}
